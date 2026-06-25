@@ -23,7 +23,7 @@ MEDICINE = Sign(
     name="MEDICINE",
     dominant=HandShapeReq(kind="claw", threshold=0.5),       # middle-finger-on-palm shape, coarse bucket
     nondominant=HandShapeReq(kind="open", threshold=0.55),   # flat upward platform palm
-    location=LocationReq(anchor="nondominant_palm", max_dist_ratio=0.35, required=True),
+    location=LocationReq(anchor="nondominant_palm", max_dist_ratio=0.45, required=True),  # roomy: hands overlap & occlude
     movement=MovementReq(
         kind="repeated",
         actor="dominant",
