@@ -207,6 +207,22 @@ def _score_orientation(buffer, sign: Sign, roles) -> float:
 
 
 # ------------------------------------------------------------------ public API
+def movement_debug(buffer: RollingBuffer, sign: Sign) -> str:
+    """One-line readout of the live movement sub-metrics, for the dev demo / calibration."""
+    req = sign.movement
+    if req.kind == MovementKind.NONE:
+        return "static (no movement required)"
+    roles = assign_roles(buffer)
+    sw = _latest_shoulder_width(buffer)
+    traj = _trajectory(buffer, roles.get(req.actor))
+    if req.kind == MovementKind.CIRCULAR:
+        m = mv.circular_metrics(traj, sw if sw else 0.0, req)
+        return (f"rot {m.net_rotation_deg:3.0f}/{req.min_total_rotation_deg:.0f}deg  "
+                f"radCV {m.radius_cv:0.2f}(full<0.30)  r/sw {m.mean_r_ratio:0.2f}  "
+                f"frames {m.n}  {m.duration:0.1f}s")
+    return f"{req.kind.value}: {len(traj)} samples"
+
+
 def verify(buffer: RollingBuffer, sign: Sign) -> VerifyResult:
     roles = assign_roles(buffer)
     sw = _latest_shoulder_width(buffer)

@@ -15,9 +15,15 @@ single frame. Confidences are in [0, 1].
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 
 from core.schema import MovementKind, MovementReq
+
+# Radius coefficient-of-variation below which a circle gets FULL radius credit. Real human
+# grinding is never a perfect circle, so we don't start penalizing until cv exceeds this.
+_RADIUS_CV_FREE = 0.30
 
 
 def _series(traj):
@@ -26,28 +32,56 @@ def _series(traj):
     return ts, pts
 
 
-def circular_confidence(actor_traj, shoulder_width: float, req: MovementReq) -> float:
-    if len(actor_traj) < 5 or shoulder_width is None or shoulder_width <= 0:
-        return 0.0
-    ts, a = _series(actor_traj)
-    if ts[-1] - ts[0] < req.min_duration_s:
-        return 0.0
+@dataclass
+class CircularMetrics:
+    """Sub-scores behind a circular-movement confidence — surfaced for live calibration."""
 
-    pivot = a.mean(axis=0)                 # the local circle center
+    score: float
+    net_rotation_deg: float
+    radius_cv: float
+    mean_r_ratio: float       # mean radius as a fraction of shoulder width
+    n: int
+    duration: float
+
+
+def circular_metrics(actor_traj, shoulder_width: float, req: MovementReq) -> CircularMetrics:
+    """Measure how circular the acting hand's path is about its own centroid.
+
+    Two ingredients, combined multiplicatively:
+      - rotation: total unwrapped angle swept about the path centroid vs. req threshold.
+      - radius steadiness: a real circle keeps a roughly constant radius; we give full credit
+        until the radius coefficient-of-variation exceeds _RADIUS_CV_FREE, then fall off over
+        req.radius_tolerance_ratio. This rejects "hand wandered randomly" without demanding a
+        machine-perfect circle from a human grind.
+    """
+    n = len(actor_traj)
+    if n < 5 or shoulder_width is None or shoulder_width <= 0:
+        return CircularMetrics(0.0, 0.0, 99.0, 0.0, n, 0.0)
+
+    ts, a = _series(actor_traj)
+    duration = float(ts[-1] - ts[0])
+    pivot = a.mean(axis=0)                 # local circle center
     rel = a - pivot
     radii = np.linalg.norm(rel, axis=1)
     mean_r = float(radii.mean())
-    # A circle needs a non-trivial radius; a near-still hand orbits nothing.
-    if mean_r / shoulder_width < 0.03:
-        return 0.0
-
+    mean_r_ratio = mean_r / shoulder_width
     angles = np.unwrap(np.arctan2(rel[:, 1], rel[:, 0]))
-    total_rotation_deg = abs(float(np.degrees(angles[-1] - angles[0])))
-    radius_cv = float(radii.std() / mean_r)   # coefficient of variation; 0 = perfect circle
+    net_rotation = abs(float(np.degrees(angles[-1] - angles[0])))
+    radius_cv = float(radii.std() / mean_r) if mean_r > 1e-6 else 99.0
 
-    rotation_score = float(np.clip(total_rotation_deg / req.min_total_rotation_deg, 0.0, 1.0))
-    radius_score = float(np.clip(1.0 - radius_cv / req.radius_tolerance_ratio, 0.0, 1.0))
-    return rotation_score * radius_score
+    # Gate: enough time, and an actual orbit (a near-still hand orbits nothing).
+    if duration < req.min_duration_s or mean_r_ratio < 0.03:
+        return CircularMetrics(0.0, net_rotation, radius_cv, mean_r_ratio, n, duration)
+
+    rotation_score = float(np.clip(net_rotation / req.min_total_rotation_deg, 0.0, 1.0))
+    radius_excess = max(0.0, radius_cv - _RADIUS_CV_FREE)
+    radius_score = float(np.clip(1.0 - radius_excess / max(req.radius_tolerance_ratio, 1e-6), 0.0, 1.0))
+    score = rotation_score * radius_score
+    return CircularMetrics(score, net_rotation, radius_cv, mean_r_ratio, n, duration)
+
+
+def circular_confidence(actor_traj, shoulder_width: float, req: MovementReq) -> float:
+    return circular_metrics(actor_traj, shoulder_width, req).score
 
 
 def linear_confidence(actor_traj, shoulder_width: float, req: MovementReq) -> float:

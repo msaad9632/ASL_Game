@@ -41,8 +41,8 @@ COFFEE = Sign(
         kind=MovementKind.CIRCULAR,
         actor=DOMINANT,
         pivot=NONDOMINANT,
-        min_total_rotation_deg=300.0,   # roughly a full loop
-        radius_tolerance_ratio=0.4,     # radius must stay steady -> a real circle, not wandering
+        min_total_rotation_deg=270.0,   # ~3/4 turn of accumulated rotation
+        radius_tolerance_ratio=0.6,     # forgiving radius band for a real (imperfect) grind
         min_duration_s=0.6,
         required=True,
     ),
