@@ -1,0 +1,13 @@
+# Normalize line endings across a multi-developer team (Windows + macOS/Linux).
+# Text files are stored with LF in the repo; Git converts on checkout as needed.
+* text=auto eol=lf
+
+# Binary assets — never normalize.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.task binary
+*.mp4  binary
+*.avi  binary
+*.mov  binary

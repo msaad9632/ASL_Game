@@ -1,0 +1,37 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- MediaPipe model weights (downloaded per-machine; see models/README.md) ---
+*.task
+
+# --- Raw recordings (large). NOTE: committed landmark fixtures in tests/fixtures/*.json
+#     are NOT ignored — the confusor tests depend on them. ---
+recordings/
+*.mp4
+*.avi
+*.mov
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# --- Test / tooling caches ---
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Claude Code local (per-machine) settings ---
+.claude/settings.local.json

@@ -1,0 +1,8 @@
+# ASL_Game v1 dependencies (Python prototype)
+# Recognition: MediaPipe Tasks API (Hand + Pose landmarks) over the webcam.
+# Geometry/movement math: numpy. Game UI + webcam I/O: OpenCV. Tests: pytest.
+
+mediapipe>=0.10.9
+opencv-python>=4.8.0
+numpy>=1.24.0
+pytest>=7.4.0
