@@ -19,11 +19,11 @@ import numpy as np
 
 from core.capture import Capture
 from core.landmarks import RollingBuffer
-from core.verifier import movement_debug, verify
+from core.verifier import location_debug, movement_debug, verify
 from signs import SIGNS
 
 
-def _draw_scorecard(img, result, move_dbg: str) -> None:
+def _draw_scorecard(img, result, move_dbg: str, loc_dbg: str = "") -> None:
     x, y, line = 12, 34, 30
     banner = "PASS" if result.passed else "sign it..."
     color = (0, 200, 0) if result.passed else (0, 165, 255)
@@ -48,9 +48,12 @@ def _draw_scorecard(img, result, move_dbg: str) -> None:
         cv2.putText(img, f"{p.name:<22}{p.score:0.2f} / {p.threshold:0.2f} [{tag}]",
                     (x + 140, y), cv2.FONT_HERSHEY_SIMPLEX, 0.48, txt_col, 1, cv2.LINE_AA)
         y += line
-    # live movement sub-metrics (the calibration readout)
+    # live movement + location sub-metrics (the calibration readouts)
     cv2.putText(img, f"movement: {move_dbg}", (x, y + 6),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+    if loc_dbg:
+        cv2.putText(img, loc_dbg, (x, y + 28),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
 
 
 def main(sign_name: str = "COFFEE", camera_index: int = 0) -> None:
@@ -89,7 +92,8 @@ def main(sign_name: str = "COFFEE", camera_index: int = 0) -> None:
                 for sx, sy in (frame.left_shoulder, frame.right_shoulder):
                     cv2.circle(bgr, (int(sx), int(sy)), 6, (255, 0, 0), -1)
 
-            _draw_scorecard(bgr, verify(buffer, sign), movement_debug(buffer, sign))
+            _draw_scorecard(bgr, verify(buffer, sign), movement_debug(buffer, sign),
+                            location_debug(buffer, sign))
             cv2.imshow(win, bgr)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break

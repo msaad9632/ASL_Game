@@ -249,6 +249,29 @@ def movement_debug(buffer: RollingBuffer, sign: Sign) -> str:
     return f"{req.kind.value}: {len(traj)} samples"
 
 
+def location_debug(buffer: RollingBuffer, sign: Sign) -> str:
+    """One-line readout of the acting hand's position vs the shoulders, for calibration.
+
+    dy = shoulder-widths BELOW the shoulder line, dx = shoulder-widths SIDEWAYS from center.
+    For a CHEST sign it also shows the target band so you can see where chest ends / belly begins.
+    """
+    loc = sign.location
+    roles = assign_roles(buffer)
+    sw = _latest_shoulder_width(buffer)
+    label = roles.get(loc.acting_hand)
+    for f in reversed(_recent(buffer, SMOOTH_SECONDS)):
+        h = f.hand(label) if label else None
+        if h is not None and f.left_shoulder is not None and sw:
+            mid = (f.left_shoulder + f.right_shoulder) / 2.0
+            dx = abs(h.center[0] - mid[0]) / sw
+            dy = (h.center[1] - mid[1]) / sw
+            if loc.anchor == Anchor.CHEST:
+                lo, hi = CHEST_OFFSET_RATIO - CHEST_VBAND, CHEST_OFFSET_RATIO + CHEST_VBAND
+                return f"loc dy {dy:.2f} (chest band {lo:.2f}-{hi:.2f})  dx {dx:.2f}"
+            return f"loc dy {dy:.2f}  dx {dx:.2f}  anchor={loc.anchor.value}"
+    return "loc: (acting hand or shoulders not visible)"
+
+
 def verify(buffer: RollingBuffer, sign: Sign) -> VerifyResult:
     roles = assign_roles(buffer)
     sw = _latest_shoulder_width(buffer)
