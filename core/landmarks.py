@@ -163,3 +163,34 @@ class RollingBuffer:
     def duration(self) -> float:
         """Seconds spanned by the buffer (0 until at least two frames are present)."""
         return (self._frames[-1].t - self._frames[0].t) if len(self._frames) >= 2 else 0.0
+
+
+class HandStabilizer:
+    """Bridge brief hand-detection dropouts by carrying a recently-seen hand forward.
+
+    MediaPipe intermittently loses a hand for a frame or two — closed fists especially, and worse
+    in poor light. For LIVE PLAY, hold the last-seen hand for up to `hold_seconds` so a momentary
+    miss doesn't reset location/handshape scoring (the flicker users feel as "it keeps dropping").
+
+    Do NOT use this when recording fixtures — training data must stay raw/honest. The carried
+    hand keeps its last position, which is exactly right for the held-still non-dominant fist and
+    harmless for the brief gaps it bridges.
+    """
+
+    def __init__(self, hold_seconds: float = 0.3):
+        self.hold_seconds = hold_seconds
+        self._last: dict[str, tuple[float, Hand]] = {}
+
+    def reset(self) -> None:
+        self._last.clear()
+
+    def stabilize(self, frame: Frame) -> Frame:
+        """Update memory with the frame's real hands, then re-add any recently-seen missing ones."""
+        present = set()
+        for h in frame.hands:
+            self._last[h.handedness] = (frame.t, h)
+            present.add(h.handedness)
+        for handedness, (t_seen, hand) in self._last.items():
+            if handedness not in present and (frame.t - t_seen) <= self.hold_seconds:
+                frame.hands.append(hand)
+        return frame

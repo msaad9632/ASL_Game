@@ -57,6 +57,11 @@ class Capture:
                 base_options=base(model_asset_path=hand_model),
                 running_mode=running_mode,
                 num_hands=num_hands,
+                # Closed fists are harder to detect than open hands; lower thresholds so the two
+                # stacked fists in COFFEE are picked up across more frames.
+                min_hand_detection_confidence=0.4,
+                min_hand_presence_confidence=0.4,
+                min_tracking_confidence=0.4,
             )
         )
         self._pose = mp_vision.PoseLandmarker.create_from_options(

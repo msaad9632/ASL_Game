@@ -153,7 +153,7 @@ def _score_location(buffer, sign: Sign, roles, shoulder_width) -> float:
                 continue
             d = normalized_distance(acting.center, other.center, shoulder_width)
             dist_score = _band_score(d, loc.min_dist_ratio, loc.max_dist_ratio)
-            vert_score = _vertical_score(loc.vertical, acting.center, other.center)
+            vert_score = _vertical_score(loc.vertical, acting.center, other.center, shoulder_width)
             vals.append(min(dist_score, vert_score))
         else:  # NEUTRAL_SPACE
             if f.left_shoulder is None or f.right_shoulder is None:
@@ -177,13 +177,22 @@ def _band_score(d: float, lo: float, hi: float) -> float:
     return float(np.clip(1.0 - (d - hi) / span, 0.0, 1.0))
 
 
-def _vertical_score(vertical, acting_c, other_c) -> float:
+def _vertical_score(vertical, acting_c, other_c, shoulder_width) -> float:
+    """Graded vertical preference, normalized to shoulder width.
+
+    For "above": full credit when the acting hand is level-or-above the anchor; only penalized
+    when it drops CLEARLY below (a soft ramp to 0 over ~1/3 shoulder width). This avoids the old
+    binary flip that snapped location to 0 every time a grinding hand dipped to the same height.
+    """
     if vertical is None:
         return 1.0
+    # dy > 0 when the acting hand is ABOVE the anchor (image y grows downward)
+    dy = (other_c[1] - acting_c[1]) / max(shoulder_width, 1e-6)
+    ramp = 0.33  # how far below (in shoulder-widths) drives the score to 0
     if vertical == "above":
-        return 1.0 if acting_c[1] < other_c[1] else 0.0
+        return 1.0 if dy >= 0 else float(np.clip(1.0 + dy / ramp, 0.0, 1.0))
     if vertical == "below":
-        return 1.0 if acting_c[1] > other_c[1] else 0.0
+        return 1.0 if dy <= 0 else float(np.clip(1.0 - dy / ramp, 0.0, 1.0))
     return 1.0
 
 

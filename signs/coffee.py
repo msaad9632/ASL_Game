@@ -32,17 +32,18 @@ COFFEE = Sign(
     location=LocationReq(
         anchor=Anchor.OTHER_HAND,
         acting_hand=DOMINANT,
-        max_dist_ratio=0.6,      # stacked / close: within ~0.6 shoulder-widths of the other fist
+        max_dist_ratio=0.9,      # fists together, but forgiving of natural spread while grinding
         min_dist_ratio=0.0,
-        vertical="above",        # dominant fist sits above the non-dominant fist
+        vertical="above",        # soft preference: dominant on top (graded, not pass/fail)
         required=True,
     ),
     movement=MovementReq(
         kind=MovementKind.CIRCULAR,
         actor=DOMINANT,
         pivot=NONDOMINANT,
-        min_total_rotation_deg=270.0,   # ~3/4 turn of accumulated rotation
-        radius_tolerance_ratio=0.6,     # forgiving radius band for a real (imperfect) grind
+        min_total_rotation_deg=360.0,   # ~one full turn: a real grind does 500deg+, but a static
+                                        # hold that merely drifts only manages ~200deg -> rejected
+        radius_tolerance_ratio=1.0,     # forgiving radius band: small real grinds are jittery
         min_duration_s=0.6,
         required=True,
     ),

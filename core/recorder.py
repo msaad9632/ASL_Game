@@ -3,6 +3,10 @@
 Each fixture is a list of Frame.to_dict() snapshots captured over a few seconds. The verifier
 replays these the same way it reads a live buffer — no special fixture format, just the same
 Frame model serialized to JSON.
+
+Flow: a live preview window opens (normal-sized, not fullscreen) showing how many hands are
+detected. You position your hands, then press SPACE to start the timed recording. This also
+warms up the hand model during the preview, so recording captures hands from the first frame.
 """
 from __future__ import annotations
 
@@ -16,57 +20,95 @@ from core.capture import Capture
 from core.landmarks import Frame
 
 
+def _draw_hands(bgr, frame) -> None:
+    for hand in frame.hands:
+        for px, py, _z in hand.points:
+            cv2.circle(bgr, (int(px), int(py)), 3, (0, 255, 0), -1)   # green landmarks
+        cx, cy = hand.center
+        cv2.circle(bgr, (int(cx), int(cy)), 6, (0, 0, 255), -1)        # red palm center
+    if frame.left_shoulder is not None and frame.right_shoulder is not None:
+        for sx, sy in (frame.left_shoulder, frame.right_shoulder):
+            cv2.circle(bgr, (int(sx), int(sy)), 6, (255, 0, 0), -1)    # blue shoulders
+
+
 def record(
     output_path: str | Path,
     seconds: float = 3.0,
     camera_index: int = 0,
     sign_name: str = "",
 ) -> list[Frame]:
-    """Record `seconds` of landmarks from the webcam and write to a JSON file.
-
-    Shows a live preview with a countdown. Returns the recorded frames.
-    """
+    """Preview → (press SPACE) → record `seconds` of landmarks → write JSON. Returns frames."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    label = sign_name or output_path.stem
 
     cap = cv2.VideoCapture(camera_index)
     if not cap.isOpened():
         raise RuntimeError(f"Could not open webcam (index {camera_index}).")
 
-    frames: list[Frame] = []
-
-    win = f"Recording: {sign_name or output_path.stem} ({seconds:.0f}s)"
+    win = f"Record: {label}"
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
-    cv2.setWindowProperty(win, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    cv2.resizeWindow(win, 960, 720)
 
-    # MediaPipe's VIDEO mode requires timestamps that increase monotonically for the LIFETIME of
-    # the detector. We therefore feed it one continuous clock (`session_t0`) across BOTH the warmup
-    # and the recording — never resetting it. The recording-relative time we store on each Frame
-    # (`t_seconds`) is a separate clock that starts at 0 when recording begins, which is all the
-    # movement math needs. (The previous version reset capture._last_ts_ms after warmup, which sent
-    # a timestamp backwards into MediaPipe and crashed/froze the window right after "GET READY".)
-    session_t0 = time.monotonic()
+    frames: list[Frame] = []
+    ts = 0  # monotonic timestamp counter for MediaPipe (real time lives on frame.t)
 
     with Capture() as capture:
-        # Warmup: run capture.process() so the hand + pose models are fully initialized before
-        # recording starts. Without this, the first ~1s of recording gets zero hands.
-        warmup_end = time.monotonic() + 2.0
-        while time.monotonic() < warmup_end:
+        # --- Preview: position hands; SPACE starts recording, q cancels ---
+        cancelled = False
+        while True:
             ok, bgr = cap.read()
             if not ok:
                 continue
             bgr = cv2.flip(bgr, 1)
-            ts_ms = int((time.monotonic() - session_t0) * 1000)
-            capture.process(bgr, timestamp_ms=ts_ms, t_seconds=0.0)
-            remaining_w = warmup_end - time.monotonic()
-            cv2.putText(bgr, f"GET READY  {remaining_w:.1f}s", (15, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 0), 2, cv2.LINE_AA)
-            label = sign_name or output_path.stem
-            cv2.putText(bgr, f"Sign: {label}", (15, 80),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1, cv2.LINE_AA)
+            ts += 33
+            frame = capture.process(bgr, timestamp_ms=ts, t_seconds=0.0)
+            _draw_hands(bgr, frame)
+
+            nh = len(frame.hands)
+            col = (0, 200, 0) if nh >= 2 else (0, 165, 255) if nh == 1 else (0, 0, 255)
+            cv2.putText(bgr, f"hands detected: {nh}", (15, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, col, 2, cv2.LINE_AA)
+            cv2.putText(bgr, "position hands, press SPACE to record", (15, 72),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(bgr, f"Sign: {label}    (q = cancel)", (15, 100),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1, cv2.LINE_AA)
+            cv2.imshow(win, bgr)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord(" "):
+                break
+            if key == ord("q"):
+                cancelled = True
+                break
+
+        if cancelled:
+            cap.release()
+            cv2.destroyAllWindows()
+            print("Cancelled — nothing recorded.")
+            return []
+
+        # --- Countdown: 3 seconds to get into position after pressing SPACE ---
+        countdown_end = time.monotonic() + 3.0
+        while True:
+            ok, bgr = cap.read()
+            if not ok:
+                continue
+            bgr = cv2.flip(bgr, 1)
+            ts += 33
+            frame = capture.process(bgr, timestamp_ms=ts, t_seconds=0.0)
+            _draw_hands(bgr, frame)
+            left = countdown_end - time.monotonic()
+            if left <= 0:
+                break
+            cv2.putText(bgr, f"GET READY: {int(left) + 1}", (15, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 255, 255), 3, cv2.LINE_AA)
+            cv2.putText(bgr, f"hands: {len(frame.hands)}", (15, 90),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
             cv2.imshow(win, bgr)
             cv2.waitKey(1)
 
+        # --- Record for `seconds` ---
         t0 = time.monotonic()
         while True:
             ok, bgr = cap.read()
@@ -77,23 +119,15 @@ def record(
             remaining = seconds - elapsed
             if remaining <= 0:
                 break
-
-            # MediaPipe gets the continuous session clock (monotonic); the Frame stores the
-            # recording-relative time (starts at 0) that the verifier/movement math uses.
-            ts_ms = int((time.monotonic() - session_t0) * 1000)
-            frame = capture.process(bgr, timestamp_ms=ts_ms, t_seconds=elapsed)
+            ts += 33
+            frame = capture.process(bgr, timestamp_ms=ts, t_seconds=elapsed)
             frames.append(frame)
 
-            for hand in frame.hands:
-                for px, py, _z in hand.points:
-                    cv2.circle(bgr, (int(px), int(py)), 3, (0, 255, 0), -1)
-
-            color = (0, 0, 255) if remaining > 1.0 else (0, 165, 255)
+            _draw_hands(bgr, frame)
             cv2.putText(bgr, f"RECORDING  {remaining:.1f}s", (15, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2, cv2.LINE_AA)
-            label = sign_name or output_path.stem
-            cv2.putText(bgr, f"Sign: {label}", (15, 80),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1, cv2.LINE_AA)
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.putText(bgr, f"hands: {len(frame.hands)}", (15, 75),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
             cv2.imshow(win, bgr)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
@@ -102,15 +136,14 @@ def record(
     cv2.destroyAllWindows()
 
     if not frames:
-        print(f"WARNING: no frames captured — camera may not be available. File not written.")
+        print("WARNING: no frames captured. File not written.")
         return frames
 
-    data = {
-        "sign_name": sign_name,
-        "frames": [f.to_dict() for f in frames],
-    }
+    data = {"sign_name": sign_name, "frames": [f.to_dict() for f in frames]}
     with open(output_path, "w") as fh:
         json.dump(data, fh)
 
-    print(f"Recorded {len(frames)} frames ({frames[-1].t - frames[0].t:.1f}s) -> {output_path}")
+    with_both = sum(1 for f in frames if len(f.hands) >= 2)
+    print(f"Recorded {len(frames)} frames ({frames[-1].t - frames[0].t:.1f}s), "
+          f"{with_both} with both hands -> {output_path}")
     return frames
