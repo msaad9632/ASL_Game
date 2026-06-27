@@ -23,7 +23,7 @@ ASL_Game/
 ├── signs/           # sign definitions as data
 ├── scenarios/
 │   ├── coffee_shop/   # Saad's themed scenario (presentation + assets only)
-│   └── hospital_shop/ # teammate's themed scenario
+│   └── hospital_shop/ # hospital scenario (see scenarios/hospital_shop/README.md)
 ├── tools/           # landmark fixture recorder
 ├── tests/           # confusor regression tests
 └── models/          # MediaPipe .task model files (downloaded, git-ignored)
@@ -57,6 +57,15 @@ python -m scenarios.coffee_shop.main --debug    # + live per-parameter score bar
 Grind out a COFFEE (top fist circling over the bottom fist) → the cup fills and the score goes
 up. Press `q` to quit.
 
+**Play the hospital scenario:**
+```bash
+python -m scenarios.hospital_shop.main          # play
+python -m scenarios.hospital_shop.main --debug  # + live per-parameter score bars
+```
+Treat a queue of patients — **HELP, PAIN, MEDICINE, EMERGENCY**. Keys: `q` quit, `n` next patient.
+See [scenarios/hospital_shop/README.md](scenarios/hospital_shop/README.md) for how to perform each
+sign and the edge-case test framework.
+
 **Dev tools:**
 ```bash
 python -m tools.demo_landmarks                  # raw landmarks + inter-hand distance
@@ -71,7 +80,9 @@ pytest                       # or: pytest tests/test_coffee.py -v
 ```
 Each sign ships a **correct** fixture and a **confusor** (the likeliest false positive). The
 confusor must fail on the *right* parameter — that's the regression lock against the single-frame
-bug.
+bug. The hospital signs additionally ship an **idle** fixture (hands present but not performing the
+sign) that must fail on movement — the lock against false positives. See
+[scenarios/hospital_shop/README.md](scenarios/hospital_shop/README.md).
 
 ## Adding a new sign (safe workflow)
 
@@ -98,6 +109,9 @@ All recognition tuning is **per-sign data** in `signs/<name>.py` — never burie
 |------|------|------|
 | Rotation needed | `min_total_rotation_deg` (COFFEE: 360) | how much circling counts as a grind |
 | Circle messiness allowed | `radius_tolerance_ratio` (COFFEE: 1.0) | how irregular a real circle can be |
+| Lift distance (linear) | `min_displacement_ratio` (HELP: 0.15) | min directed travel for a linear move |
+| Hands-closing (converge) | `min_approach_ratio` (PAIN: 0.15) | how far the inter-hand gap must shrink |
+| Oscillations (repeated) | `min_cycles` (MEDICINE: 2, EMERGENCY: 3) | back-and-forth cycles for a repeated move |
 | Hands-together distance | `LocationReq.max_dist_ratio` (COFFEE: 0.9) | max gap between hands (shoulder-widths) |
 | Per-parameter pass bar | `min_confidence` (default 0.6) | threshold each parameter must clear |
 
