@@ -28,9 +28,9 @@ PLEASE = Sign(
     dominant=HandShapeReq(kind="open", required=True),
     nondominant=None,
     location=LocationReq(
-        anchor=Anchor.NEUTRAL_SPACE,
+        anchor=Anchor.CHEST,     # specifically the chest, not just "somewhere on the torso"
         acting_hand=DOMINANT,
-        max_dist_ratio=1.5,      # chest sits ~1 shoulder-width below the shoulder line; be generous
+        max_dist_ratio=0.5,      # within ~0.5 shoulder-widths of the chest center; rejects belly/shoulder
         required=True,
     ),
     movement=MovementReq(

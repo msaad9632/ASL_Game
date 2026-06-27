@@ -40,7 +40,8 @@ class HandShapeReq:
 # --------------------------------------------------------------------------- location
 class Anchor(str, Enum):
     OTHER_HAND = "other_hand"        # position relative to the other hand's center (two-handed)
-    NEUTRAL_SPACE = "neutral_space"  # in the default signing space in front of the torso
+    NEUTRAL_SPACE = "neutral_space"  # anywhere in the signing space in front of the torso (loose)
+    CHEST = "chest"                  # specifically the center of the chest (below the shoulders)
 
 
 @dataclass(frozen=True)

@@ -53,3 +53,19 @@ class TestPleaseConfusor:
         """The confusor has a correct open hand — it fails ONLY because of movement."""
         p = verify(_load_buffer("please_confusor"), PLEASE).get("handshape_dominant")
         assert p.cleared, f"confusor handshape should still be good: {p.score:.2f}"
+
+
+class TestPleaseWrongLocation:
+    """The same open-hand circle, but on the BELLY instead of the chest, must fail on location.
+
+    This is what makes PLEASE teach the *right* sign: correct handshape and correct movement
+    can't bypass the location parameter. (PLEASE is defined on the chest, not the belly.)
+    """
+
+    def test_belly_fails_on_location(self):
+        result = verify(_load_buffer("please_belly"), PLEASE)
+        assert not result.passed, "PLEASE on the belly must not pass"
+        assert "location" in result.failing_required, (
+            f"belly should fail on location; failing={result.failing_required}"
+        )
+

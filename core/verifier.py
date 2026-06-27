@@ -25,6 +25,9 @@ from core.schema import DOMINANT, NONDOMINANT, Anchor, MovementKind, Sign
 # how much of the most-recent window to smooth handshape/location/orientation over
 SMOOTH_SECONDS = 0.5
 
+# the chest sits this many shoulder-widths below the shoulder line (for Anchor.CHEST)
+CHEST_OFFSET_RATIO = 0.6
+
 
 @dataclass
 class ParamScore:
@@ -149,7 +152,15 @@ def _score_location(buffer, sign: Sign, roles, shoulder_width) -> float:
             dist_score = _band_score(d, loc.min_dist_ratio, loc.max_dist_ratio)
             vert_score = _vertical_score(loc.vertical, acting.center, other.center, shoulder_width)
             vals.append(min(dist_score, vert_score))
-        else:  # NEUTRAL_SPACE — in front of the torso, below the shoulders
+        elif loc.anchor == Anchor.CHEST:
+            if f.left_shoulder is None or f.right_shoulder is None:
+                continue
+            mid = (f.left_shoulder + f.right_shoulder) / 2.0
+            chest = mid + np.array([0.0, CHEST_OFFSET_RATIO * shoulder_width])  # below shoulders
+            d = normalized_distance(acting.center, chest, shoulder_width)
+            vals.append(_band_score(d, 0.0, loc.max_dist_ratio))
+
+        else:  # NEUTRAL_SPACE — anywhere in front of the torso, below the shoulders (loose)
             if f.left_shoulder is None or f.right_shoulder is None:
                 continue
             mid = (f.left_shoulder + f.right_shoulder) / 2.0
