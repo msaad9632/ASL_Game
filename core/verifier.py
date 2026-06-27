@@ -131,6 +131,31 @@ def _score_handshape(buffer, handedness, kind) -> float:
     return float(np.median(vals)) if vals else 0.0
 
 
+def _best_fit_roles(buffer, sign: Sign, roles: dict) -> dict:
+    """Stabilize dominant/nondominant for two-handed signs with DIFFERENT handshapes.
+
+    assign_roles() picks the dominant hand by which one moved more — perfect for signs where one
+    hand acts and one holds (COFFEE), but unstable for signs where BOTH hands move together (HELP:
+    fist + open palm both lift). There the role labels flicker frame-to-frame, so the two handshape
+    scores keep swapping 1.0<->0.0 and never line up. When the two declared handshapes differ, we
+    instead keep whichever role assignment best FITS the declared shapes. Symmetric signs (COFFEE =
+    fist+fist) and one-handed signs are left exactly as assign_roles returned them.
+    """
+    if not sign.two_handed or sign.nondominant is None:
+        return roles
+    if sign.dominant.kind == sign.nondominant.kind:
+        return roles
+    dl, nl = roles.get(DOMINANT), roles.get(NONDOMINANT)
+    if dl is None or nl is None:
+        return roles
+    dk, nk = sign.dominant.kind, sign.nondominant.kind
+    current = min(_score_handshape(buffer, dl, dk), _score_handshape(buffer, nl, nk))
+    swapped = min(_score_handshape(buffer, nl, dk), _score_handshape(buffer, dl, nk))
+    if swapped > current:
+        return {DOMINANT: nl, NONDOMINANT: dl}
+    return roles
+
+
 def _score_location(buffer, sign: Sign, roles, shoulder_width) -> float:
     if shoulder_width is None:
         return 0.0
@@ -256,7 +281,7 @@ def movement_debug(buffer: RollingBuffer, sign: Sign) -> str:
 
 
 def verify(buffer: RollingBuffer, sign: Sign) -> VerifyResult:
-    roles = assign_roles(buffer)
+    roles = _best_fit_roles(buffer, sign, assign_roles(buffer))
     sw = _latest_shoulder_width(buffer)
     params: list[ParamScore] = []
 

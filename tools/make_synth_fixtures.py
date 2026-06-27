@@ -123,9 +123,9 @@ def help_clip(moving: bool) -> list[Frame]:
     out = []
     for i, t in enumerate(_ts()):
         fr = (i / (N - 1)) if moving else 0.0
-        dom = dom0 + np.array([0.0, -70.0 * fr])                 # dominant rises a bit more...
+        dom = dom0 + np.array([0.0, -70.0 * fr])                 # dominant (fist) rises a bit more...
         ndom = ndom0 + np.array([0.0, -55.0 * fr])               # ...so it's the higher-motion hand
-        out.append(_frame(t, [make_hand("Right", dom, "a"), make_hand("Left", ndom, "open")]))
+        out.append(_frame(t, [make_hand("Right", dom, "fist"), make_hand("Left", ndom, "open")]))
     return out
 
 
