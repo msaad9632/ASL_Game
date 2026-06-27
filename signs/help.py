@@ -50,11 +50,11 @@ HELP = Sign(
         kind=MovementKind.LINEAR,
         actor=DOMINANT,
         direction=(0.0, -1.0),           # image-space up (y decreases upward)
-        min_displacement_ratio=0.08,
+        min_displacement_ratio=0.15,     # a DELIBERATE lift (~0.15 shoulder-widths), not a drift
         min_duration_s=0.4,
-        # a real hand-lift is never perfectly straight/monotonic, so linear_confidence caps
-        # around 0.5-0.6; 0.45 still gates motion (a frozen hold scores 0 and fails).
-        min_confidence=0.45,
+        # real hand-lifts are never perfectly straight, so linear_confidence caps ~0.55-0.75; 0.5
+        # accepts a clear lift while a frozen/jittering hand still scores 0 (hard floor in movement.py).
+        min_confidence=0.5,
         required=True,
     ),
     orientation=OrientationReq(hand=NONDOMINANT, facing=PalmFacing.UP, required=False),

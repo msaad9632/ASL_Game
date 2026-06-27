@@ -98,3 +98,24 @@ class TestConfusor:
             f"{sign.name} confusor movement should be below threshold: "
             f"{m.score:.2f} >= {m.threshold:.2f}"
         )
+
+
+@pytest.mark.parametrize("sign,base", HOSPITAL_SIGNS, ids=[s.name for s, _ in HOSPITAL_SIGNS])
+class TestIdle:
+    """The cardinal false-positive case: hands present in roughly the right handshape but the user
+    is NOT performing the sign — only incidental jitter. Must never pass, and must fail on movement
+    (it is the absence of the real motion that disqualifies it, not the handshape)."""
+
+    def test_overall_fail(self, sign, base):
+        result = verify(_require(base, "idle"), sign)
+        assert not result.passed, (
+            f"{sign.name} idle (present but not signing) must NOT pass — "
+            f"scores={[(p.name, round(p.score, 2)) for p in result.params]}"
+        )
+
+    def test_fails_on_movement(self, sign, base):
+        result = verify(_require(base, "idle"), sign)
+        m = result.get("movement")
+        assert m is not None and m.score < m.threshold, (
+            f"{sign.name} idle movement should be below threshold: {m.score:.2f} >= {m.threshold:.2f}"
+        )

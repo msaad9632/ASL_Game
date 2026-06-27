@@ -80,9 +80,12 @@ def linear_confidence(actor_traj, shoulder_width: float, req: MovementReq) -> fl
 
     disp = a[-1] - a[0]
     mag = float(np.linalg.norm(disp))
-    if mag < 1e-6:
+    mag_ratio = mag / shoulder_width
+    # Hard floor: a near-still hand (incidental jitter/repositioning) is never "linear motion",
+    # regardless of the sign's min_displacement_ratio.
+    if mag_ratio < 0.05:
         return 0.0
-    mag_score = float(np.clip((mag / shoulder_width) / req.min_displacement_ratio, 0.0, 1.0))
+    mag_score = float(np.clip(mag_ratio / req.min_displacement_ratio, 0.0, 1.0))
 
     unit = disp / mag
     dir_score = 1.0
@@ -99,21 +102,40 @@ def linear_confidence(actor_traj, shoulder_width: float, req: MovementReq) -> fl
 
 
 def repeated_confidence(actor_traj, shoulder_width: float, req: MovementReq) -> float:
-    if len(actor_traj) < 6:
+    if len(actor_traj) < 6 or shoulder_width is None or shoulder_width <= 0:
         return 0.0
     ts, a = _series(actor_traj)
     if ts[-1] - ts[0] < req.min_duration_s:
         return 0.0
 
+    # distance of the hand from the centroid of its own path
     signal = np.linalg.norm(a - a.mean(axis=0), axis=1)
-    signal = signal - signal.mean()
-    if np.allclose(signal, 0):
+
+    # A genuine repeated motion has real AMPLITUDE. Reject jitter / a near-still hand outright —
+    # this is what stops a barely-moving claw from racking up false "cycles" and passing.
+    amp_ratio = float(signal.max() - signal.min()) / shoulder_width
+    if amp_ratio < 0.05:
         return 0.0
-    signs = np.sign(signal)
-    signs[signs == 0] = 1
-    crossings = int(np.sum(np.abs(np.diff(signs)) > 0))
+
+    centered = signal - signal.mean()
+    # Count direction reversals only when the swing clears a noise band, so micro-wiggles near the
+    # mean don't inflate the cycle count.
+    noise = 0.25 * float(np.max(np.abs(centered)))
+    crossings, last = 0, 0
+    for v in centered:
+        if abs(v) < noise:
+            continue
+        cur = 1 if v > 0 else -1
+        if last != 0 and cur != last:
+            crossings += 1
+        last = cur
     cycles = crossings / 2.0
-    return float(np.clip(cycles / max(req.min_cycles, 1), 0.0, 1.0))
+
+    cycle_score = float(np.clip(cycles / max(req.min_cycles, 1), 0.0, 1.0))
+    amp_score = float(np.clip(amp_ratio / 0.08, 0.0, 1.0))
+    # Need BOTH enough cycles AND enough amplitude: a tiny tremor with many reversals fails on
+    # amplitude; a single big sweep with no reversals fails on cycles.
+    return float(min(cycle_score, amp_score))
 
 
 def converge_confidence(traj_a, traj_b, shoulder_width: float, req: MovementReq) -> float:

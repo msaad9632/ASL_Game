@@ -118,44 +118,69 @@ def _ts():
     return [i * (T / (N - 1)) for i in range(N)]
 
 
-def help_clip(moving: bool) -> list[Frame]:
-    dom0, ndom0 = np.array([CX, 228.0]), np.array([CX, 300.0])   # A-hand stacked above open palm
+# Each clip is built in one of three modes:
+#   "correct"  — performs the sign's real motion (must PASS)
+#   "confusor" — freezes the correct handshape with NO motion (must FAIL on movement)
+#   "idle"     — correct-ish handshapes held with small incidental JITTER, no sign motion: the
+#                "user is present but not performing the sign" case (must FAIL on movement)
+_JIT = np.random.default_rng(20260627)            # fixed seed -> reproducible idle fixtures
+
+
+def _jit(scale: float = 2.0) -> np.ndarray:
+    return _JIT.normal(0.0, scale, size=2)
+
+
+def _progress(i: int, mode: str) -> float:
+    return (i / (N - 1)) if mode == "correct" else 0.0   # confusor & idle make no sign progress
+
+
+def help_clip(mode: str) -> list[Frame]:
+    dom0, ndom0 = np.array([CX, 228.0]), np.array([CX, 300.0])   # fist stacked above open palm
     out = []
     for i, t in enumerate(_ts()):
-        fr = (i / (N - 1)) if moving else 0.0
+        fr = _progress(i, mode)
         dom = dom0 + np.array([0.0, -70.0 * fr])                 # dominant (fist) rises a bit more...
         ndom = ndom0 + np.array([0.0, -55.0 * fr])               # ...so it's the higher-motion hand
+        if mode == "idle":
+            dom, ndom = dom + _jit(), ndom + _jit()
         out.append(_frame(t, [make_hand("Right", dom, "fist"), make_hand("Left", ndom, "open")]))
     return out
 
 
-def pain_clip(moving: bool) -> list[Frame]:
+def pain_clip(mode: str) -> list[Frame]:
     dom0, ndom0 = np.array([CX - 100.0, 280.0]), np.array([CX + 100.0, 280.0])
     dom1, ndom1 = np.array([CX - 30.0, 280.0]), np.array([CX + 30.0, 280.0])
     out = []
     for i, t in enumerate(_ts()):
-        fr = (i / (N - 1)) if moving else 0.0
+        fr = _progress(i, mode)
         dom = dom0 + (dom1 - dom0) * fr
         ndom = ndom0 + (ndom1 - ndom0) * fr
+        if mode == "idle":
+            dom, ndom = dom + _jit(), ndom + _jit()
         out.append(_frame(t, [make_hand("Right", dom, "index"), make_hand("Left", ndom, "index")]))
     return out
 
 
-def medicine_clip(moving: bool) -> list[Frame]:
+def medicine_clip(mode: str) -> list[Frame]:
     ndom = np.array([CX, 300.0])                                 # open palm held still
     out = []
     for t in _ts():
-        dx = 25.0 * math.sin(2 * math.pi * 1.5 * t) if moving else 0.0
+        dx = 25.0 * math.sin(2 * math.pi * 1.5 * t) if mode == "correct" else 0.0
         dom = np.array([CX + dx, 228.0])                         # claw rocks over the palm
-        out.append(_frame(t, [make_hand("Right", dom, "claw"), make_hand("Left", ndom, "open")]))
+        nd = ndom.copy()
+        if mode == "idle":
+            dom, nd = dom + _jit(), nd + _jit()
+        out.append(_frame(t, [make_hand("Right", dom, "claw"), make_hand("Left", nd, "open")]))
     return out
 
 
-def emergency_clip(moving: bool) -> list[Frame]:
+def emergency_clip(mode: str) -> list[Frame]:
     out = []
     for t in _ts():
-        dx = 30.0 * math.sin(2 * math.pi * 2.0 * t) if moving else 0.0
+        dx = 30.0 * math.sin(2 * math.pi * 2.0 * t) if mode == "correct" else 0.0
         dom = np.array([CX + dx, 220.0])                         # single claw shaken fast
+        if mode == "idle":
+            dom = dom + _jit()
         out.append(_frame(t, [make_hand("Right", dom, "claw")]))
     return out
 
@@ -170,8 +195,9 @@ BUILDERS = {
 
 def main() -> None:
     for base, (sign_name, builder) in BUILDERS.items():
-        _write(f"{base}_correct", sign_name, builder(moving=True))
-        _write(f"{base}_confusor", sign_name, builder(moving=False))
+        _write(f"{base}_correct", sign_name, builder("correct"))
+        _write(f"{base}_confusor", sign_name, builder("confusor"))
+        _write(f"{base}_idle", sign_name, builder("idle"))
 
 
 if __name__ == "__main__":
