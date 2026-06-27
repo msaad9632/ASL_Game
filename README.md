@@ -54,8 +54,8 @@ look (background, prompts, animations). This split is deliberate — see [CLAUDE
 python -m scenarios.coffee_shop.main            # play
 python -m scenarios.coffee_shop.main --debug    # + live per-parameter score bars
 ```
-Grind out a COFFEE (top fist circling over the bottom fist) → the cup fills and the score goes
-up. Press `q` to quit.
+The customer asks for a series of signs — **COFFEE → PLEASE → THANK YOU** — looping forever.
+Perform each correctly to earn **+10** and advance to the next. Press `q` to quit.
 
 **Dev tools:**
 ```bash

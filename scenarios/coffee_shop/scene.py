@@ -72,10 +72,10 @@ class CoffeeShopScene:
 
     # ----------------------------------------------------------------- render
     def render(self, cam_bgr, prompt_text: str, score: int, state: str,
-               success_progress: float = 0.0, debug_overlay=None):
+               success_progress: float = 0.0, debug_overlay=None, success_text: str = "CORRECT!"):
         canvas = self.bg.copy()
         game.draw_banner(canvas, "Customer order:", prompt_text)
-        game.draw_score(canvas, score)
+        game.draw_score(canvas, score, label="Score")
 
         # the "current order" cup near the counter fills while a success plays
         cup_fill = success_progress if state == "success" else 0.0
@@ -86,9 +86,8 @@ class CoffeeShopScene:
 
         if state == "success":
             game.flash(canvas, 0.45 * (1.0 - success_progress), (60, 200, 60))
-            text = "COFFEE SERVED!"
-            (tw, _), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.4, 3)
-            cv2.putText(canvas, text, ((self.W - tw) // 2, self.H // 2),
+            (tw, _), _ = cv2.getTextSize(success_text, cv2.FONT_HERSHEY_SIMPLEX, 1.4, 3)
+            cv2.putText(canvas, success_text, ((self.W - tw) // 2, self.H // 2),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.4, (255, 255, 255), 3, cv2.LINE_AA)
 
         if debug_overlay is not None:

@@ -6,11 +6,13 @@ SIGNS registry (handy for scenarios that drive prompts by sign name).
 from signs.coffee import COFFEE
 from signs.letter_a import LETTER_A
 from signs.please import PLEASE
+from signs.thank_you import THANK_YOU
 
 SIGNS = {
     COFFEE.name: COFFEE,
     LETTER_A.name: LETTER_A,
     PLEASE.name: PLEASE,
+    THANK_YOU.name: THANK_YOU,
 }
 
-__all__ = ["COFFEE", "LETTER_A", "PLEASE", "SIGNS"]
+__all__ = ["COFFEE", "LETTER_A", "PLEASE", "THANK_YOU", "SIGNS"]
