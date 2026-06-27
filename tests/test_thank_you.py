@@ -48,3 +48,18 @@ class TestThankYouConfusor:
     def test_handshape_still_good(self):
         p = verify(_load_buffer("thankyou_confusor"), THANK_YOU).get("handshape_dominant")
         assert p.cleared, f"confusor handshape should still be good: {p.score:.2f}"
+
+
+class TestThankYouWrongLocation:
+    """An open hand moving down but starting BELOW the chin must fail on location.
+
+    THANK YOU starts at the chin; a downward open-hand move that never reaches chin height is not
+    THANK YOU. Correct handshape + correct (downward) movement must not bypass the location.
+    """
+
+    def test_lowstart_fails_on_location(self):
+        result = verify(_load_buffer("thankyou_lowstart"), THANK_YOU)
+        assert not result.passed, "down-from-chest must not pass as THANK YOU"
+        assert "location" in result.failing_required, (
+            f"low start should fail on location; failing={result.failing_required}"
+        )

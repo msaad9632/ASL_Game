@@ -33,6 +33,11 @@ CHEST_OFFSET_RATIO = 0.35
 CHEST_VBAND = 0.25
 CHEST_VFALL = 0.12
 
+# Anchor.CHIN: the hand must reach chin height, ~this many shoulder-widths ABOVE the shoulder
+# line (negative dy), within CHIN_TOL. Used by signs that START at the chin (e.g. THANK YOU).
+CHIN_OFFSET_RATIO = 0.6
+CHIN_TOL = 0.5
+
 
 @dataclass
 class ParamScore:
@@ -141,6 +146,9 @@ def _score_location(buffer, sign: Sign, roles, shoulder_width) -> float:
     if acting_label is None:
         return 0.0
 
+    if loc.anchor == Anchor.CHIN:
+        return _score_chin_reach(buffer, acting_label, shoulder_width, loc)
+
     vals = []
     for f in _recent(buffer, SMOOTH_SECONDS):
         acting = f.hand(acting_label)
@@ -208,6 +216,30 @@ def _vertical_score(vertical, acting_c, other_c, shoulder_width) -> float:
     return 1.0
 
 
+def _score_chin_reach(buffer, acting_label, shoulder_width, loc) -> float:
+    """Score how close the acting hand's HIGHEST point gets to chin height, over the window.
+
+    The hand must reach up to the chin at some point (signs like THANK YOU start there). We take
+    the highest position (most-negative dy = above the shoulders) among roughly-centered frames,
+    and score its closeness to the chin target. A hand that stays down at the chest never reaches
+    chin height, so it scores ~0.
+    """
+    dys = []
+    for f in buffer:
+        h = f.hand(acting_label)
+        if h is None or f.left_shoulder is None or f.right_shoulder is None:
+            continue
+        mid = (f.left_shoulder + f.right_shoulder) / 2.0
+        dx = abs(h.center[0] - mid[0]) / shoulder_width
+        if dx <= loc.max_dist_ratio:                       # chin is near center, not out to the side
+            dys.append((h.center[1] - mid[1]) / shoulder_width)
+    if not dys:
+        return 0.0
+    top = min(dys)                                          # highest hand position in the window
+    target = -CHIN_OFFSET_RATIO                             # chin sits above the shoulder line
+    return float(np.clip(1.0 - abs(top - target) / CHIN_TOL, 0.0, 1.0))
+
+
 def _score_movement(buffer, sign: Sign, roles, shoulder_width) -> float:
     req = sign.movement
     if req.kind == MovementKind.NONE:
@@ -268,6 +300,11 @@ def location_debug(buffer: RollingBuffer, sign: Sign) -> str:
             if loc.anchor == Anchor.CHEST:
                 lo, hi = CHEST_OFFSET_RATIO - CHEST_VBAND, CHEST_OFFSET_RATIO + CHEST_VBAND
                 return f"loc dy {dy:.2f} (chest band {lo:.2f}-{hi:.2f})  dx {dx:.2f}"
+            if loc.anchor == Anchor.CHIN:
+                tops = [(g.hand(label).center[1] - (g.left_shoulder + g.right_shoulder)[1] / 2.0) / sw
+                        for g in buffer if g.hand(label) is not None and g.left_shoulder is not None]
+                top = min(tops) if tops else dy
+                return f"loc top-dy {top:.2f} (chin ~ -{CHIN_OFFSET_RATIO:.2f})  now dy {dy:.2f}"
             return f"loc dy {dy:.2f}  dx {dx:.2f}  anchor={loc.anchor.value}"
     return "loc: (acting hand or shoulders not visible)"
 

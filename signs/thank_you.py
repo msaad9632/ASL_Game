@@ -3,13 +3,14 @@
 THANK YOU = a flat/open hand starting at the chin/lips, moving forward and DOWN toward the
 person. From a front-facing webcam the reliable 2D signal is the downward motion (the forward
 component is along the camera axis and barely visible in 2D), so movement is a downward LINEAR
-motion. Location is left non-required because the hand travels through space (chin -> out); the
-distinguishing parameters are the open handshape + the downward movement.
+motion. Because the hand travels, location is checked as "did it REACH chin height" (its highest
+point must be up at the chin) rather than an average position — a hand that starts below the chin
+fails on location.
 
 Parameters declared:
   - handshape (dominant): open / flat hand     [required]
   - movement: linear, downward                 [required]
-  - location: not gated (the hand moves)       [not required]
+  - location: reached chin height (Anchor.CHIN)[required]
   - orientation: palm up-ish                   [not required in v1]
 """
 from core.schema import (
@@ -30,10 +31,10 @@ THANK_YOU = Sign(
     dominant=HandShapeReq(kind="open", required=True),
     nondominant=None,
     location=LocationReq(
-        anchor=Anchor.NEUTRAL_SPACE,
+        anchor=Anchor.CHIN,      # the hand must START at the chin (reach chin height in the window)
         acting_hand=DOMINANT,
-        max_dist_ratio=2.5,      # very loose; the hand moves through space, so don't gate it
-        required=False,
+        max_dist_ratio=0.6,      # horizontal: chin is near center, not out to the side
+        required=True,
     ),
     movement=MovementReq(
         kind=MovementKind.LINEAR,
