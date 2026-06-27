@@ -3,17 +3,15 @@
 A Sign is a frozen dataclass describing the five linguistic parameters (handshape per hand,
 location, movement, palm orientation, non-manual markers), each carrying a `required` flag and
 its own confidence threshold. The Phase 3 verifier reads a Sign + a RollingBuffer and gates the
-overall pass on EACH required parameter individually — never an average.
+overall pass on EACH required parameter individually — never an average. That gating is what makes
+the single-frame COFFEE bug impossible to reproduce.
 
-Structural guard against the single-frame COFFEE bug (enforced in Sign.__post_init__):
-movement is required IF AND ONLY IF a real movement kind is declared. You cannot construct a
-sign that:
-  - declares a movement (circular/linear/repeated) but marks it not-required (would be ignored), or
-  - marks movement required but declares kind = NONE (nothing to check).
-So any sign that involves motion MUST be checked over the rolling window. Full stop.
+Structural guard against the single-frame bug (enforced in Sign.__post_init__):
+movement is required IF AND ONLY IF a real movement kind is declared. You cannot construct a sign
+that declares a movement but marks it not-required, or marks movement required but declares NONE.
 
-All spatial thresholds are RATIOS of shoulder width (never raw pixels), matching
-core.landmarks.normalized_distance, so they hold regardless of camera distance.
+All spatial thresholds are RATIOS of shoulder width (never raw pixels) so they hold regardless
+of camera distance.
 """
 from __future__ import annotations
 
@@ -21,8 +19,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, Tuple
 
-# Roles — which physical hand a requirement refers to. The verifier maps these roles to the
-# detected Left/Right hands (Phase 3); the schema stays handedness-agnostic.
+# Roles — which physical hand a requirement refers to. The verifier maps these to detected
+# Left/Right hands; the schema stays handedness-agnostic.
 DOMINANT = "dominant"
 NONDOMINANT = "nondominant"
 
@@ -32,9 +30,9 @@ NONDOMINANT = "nondominant"
 class HandShapeReq:
     """Required handshape for one hand, matched by core.handshape predicates."""
 
-    kind: str                       # e.g. "fist" / "S" / "A" / "open"
+    kind: str                       # "fist" / "s" / "a" / "index" / "open" / "claw"
     required: bool = True
-    min_confidence: float = 0.6     # the handshape scorer must clear this to count as a match
+    min_confidence: float = 0.6
 
 
 # --------------------------------------------------------------------------- location
@@ -47,17 +45,13 @@ class Anchor(str, Enum):
 
 @dataclass(frozen=True)
 class LocationReq:
-    """Where the acting hand must be, normalized to shoulder width.
-
-    Two-handed signs typically anchor on OTHER_HAND (e.g. dominant stacked just above the
-    non-dominant fist). One-handed signs anchor on NEUTRAL_SPACE.
-    """
+    """Where the acting hand must be, normalized to shoulder width."""
 
     anchor: Anchor = Anchor.OTHER_HAND
     acting_hand: str = DOMINANT
-    max_dist_ratio: float = 1.0                 # max distance to the anchor, in shoulder-widths
-    min_dist_ratio: float = 0.0                 # min distance (keeps hands from fully overlapping)
-    vertical: Optional[str] = None              # "above" | "below" (acting vs anchor), or None
+    max_dist_ratio: float = 1.0
+    min_dist_ratio: float = 0.0
+    vertical: Optional[str] = None           # "above" | "below" | None
     required: bool = True
     min_confidence: float = 0.6
 
@@ -68,33 +62,33 @@ class MovementKind(str, Enum):
     LINEAR = "linear"
     CIRCULAR = "circular"
     REPEATED = "repeated"
+    CONVERGE = "converge"            # two hands closing toward each other (e.g. PAIN)
 
 
 @dataclass(frozen=True)
 class MovementReq:
-    """How the acting hand must move over the rolling window.
-
-    Defaults describe "no movement" (static signs). For a real movement, set `kind` to a
-    non-NONE value; the schema then forces `required=True` (see Sign.__post_init__).
-    """
+    """How the acting hand must move over the rolling window."""
 
     kind: MovementKind = MovementKind.NONE
-    actor: str = DOMINANT                       # role whose motion is measured
-    pivot: str = NONDOMINANT                    # reference role for circular motion
+    actor: str = DOMINANT
+    pivot: str = NONDOMINANT
 
     # circular
-    min_total_rotation_deg: float = 300.0       # |summed unwrapped rotation| about the pivot
-    radius_tolerance_ratio: float = 0.4         # allowed radius spread (fraction); rejects wandering
+    min_total_rotation_deg: float = 300.0
+    radius_tolerance_ratio: float = 0.4
 
     # linear
-    direction: Optional[Tuple[float, float]] = None  # rough (dx, dy), image space (y points down)
-    min_displacement_ratio: float = 0.3              # window start->end displacement, shoulder-widths
+    direction: Optional[Tuple[float, float]] = None
+    min_displacement_ratio: float = 0.3
 
     # repeated
-    min_cycles: int = 2                         # number of back-and-forth cycles
+    min_cycles: int = 2
+
+    # converge (PAIN): minimum shrinkage of inter-hand gap, in shoulder-widths
+    min_approach_ratio: float = 0.15
 
     # shared
-    min_duration_s: float = 0.6                 # require this much elapsed motion in the window
+    min_duration_s: float = 0.6
     required: bool = True
     min_confidence: float = 0.6
 
@@ -111,7 +105,7 @@ class PalmFacing(str, Enum):
 
 @dataclass(frozen=True)
 class OrientationReq:
-    """Palm-facing requirement for one hand. Off by default (required=False) in v1."""
+    """Palm-facing requirement for one hand. Off by default in v1."""
 
     hand: str = DOMINANT
     facing: PalmFacing = PalmFacing.DOWN
@@ -130,22 +124,19 @@ class Sign:
     movement: MovementReq
     nondominant: Optional[HandShapeReq] = None
     orientation: Optional[OrientationReq] = None
-    nmm: None = None                 # non-manual markers — placeholder for v1
+    nmm: None = None
     two_handed: bool = True
 
     def __post_init__(self):
-        # The structural guard. Movement is required IFF a real kind is declared.
         has_motion = self.movement.kind != MovementKind.NONE
         if has_motion and not self.movement.required:
             raise ValueError(
                 f"Sign '{self.name}': declares movement kind={self.movement.kind.value} but "
-                f"movement.required=False. A declared movement must be enforced - otherwise the "
-                f"sign could pass with no motion (the single-frame COFFEE bug). Set required=True."
+                f"movement.required=False. A declared movement must be enforced."
             )
         if self.movement.required and not has_motion:
             raise ValueError(
-                f"Sign '{self.name}': movement.required=True but kind=NONE - nothing to verify. "
-                f"Give it a real movement kind (linear/circular/repeated), or mark it not required."
+                f"Sign '{self.name}': movement.required=True but kind=NONE — nothing to verify."
             )
         if self.two_handed and self.nondominant is None:
             raise ValueError(
@@ -153,7 +144,6 @@ class Sign:
             )
 
     def required_parameters(self) -> list[str]:
-        """Stable parameter keys the verifier must individually clear for an overall pass."""
         params: list[str] = []
         if self.dominant.required:
             params.append("handshape_dominant")

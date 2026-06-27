@@ -3,15 +3,11 @@
 Each detector reads a *trajectory* (a list of (t, center) samples spanning the window), never a
 single frame. Confidences are in [0, 1].
 
-  - circular: the acting hand's center is measured by its angle about the CENTROID of its own
-    path (the local circle center). We unwrap that angle across frames and sum the rotation;
-    we also check the radius about the centroid stays steady. A real grind clears both; a hand
-    that wandered randomly fails the radius check; a motionless hand has ~zero radius and scores
-    0. (The non-dominant fist is handled by the LOCATION check, not here — movement only asks
-    "did this hand trace a circle".)
-  - linear: window start->end displacement, checked for magnitude, direction, and monotonic
-    progression (not jitter).
-  - repeated: number of oscillation cycles in the distance-from-mean signal.
+  - circular: the acting hand's center angle about its own path centroid; unwrapped + summed;
+    radius stability check rejects random wandering. Calibrated on real hands (_RADIUS_CV_FREE).
+  - linear: window start->end displacement, direction, and monotonic progression.
+  - repeated: oscillation cycles in the distance-from-mean signal.
+  - converge: two-hand version — gap between both hands closing over the window (PAIN).
 """
 from __future__ import annotations
 
@@ -39,28 +35,20 @@ class CircularMetrics:
     score: float
     net_rotation_deg: float
     radius_cv: float
-    mean_r_ratio: float       # mean radius as a fraction of shoulder width
+    mean_r_ratio: float
     n: int
     duration: float
 
 
 def circular_metrics(actor_traj, shoulder_width: float, req: MovementReq) -> CircularMetrics:
-    """Measure how circular the acting hand's path is about its own centroid.
-
-    Two ingredients, combined multiplicatively:
-      - rotation: total unwrapped angle swept about the path centroid vs. req threshold.
-      - radius steadiness: a real circle keeps a roughly constant radius; we give full credit
-        until the radius coefficient-of-variation exceeds _RADIUS_CV_FREE, then fall off over
-        req.radius_tolerance_ratio. This rejects "hand wandered randomly" without demanding a
-        machine-perfect circle from a human grind.
-    """
+    """Measure how circular the acting hand's path is about its own centroid."""
     n = len(actor_traj)
     if n < 5 or shoulder_width is None or shoulder_width <= 0:
         return CircularMetrics(0.0, 0.0, 99.0, 0.0, n, 0.0)
 
     ts, a = _series(actor_traj)
     duration = float(ts[-1] - ts[0])
-    pivot = a.mean(axis=0)                 # local circle center
+    pivot = a.mean(axis=0)
     rel = a - pivot
     radii = np.linalg.norm(rel, axis=1)
     mean_r = float(radii.mean())
@@ -69,7 +57,6 @@ def circular_metrics(actor_traj, shoulder_width: float, req: MovementReq) -> Cir
     net_rotation = abs(float(np.degrees(angles[-1] - angles[0])))
     radius_cv = float(radii.std() / mean_r) if mean_r > 1e-6 else 99.0
 
-    # Gate: enough time, and an actual orbit (a near-still hand orbits nothing).
     if duration < req.min_duration_s or mean_r_ratio < 0.03:
         return CircularMetrics(0.0, net_rotation, radius_cv, mean_r_ratio, n, duration)
 
@@ -93,9 +80,12 @@ def linear_confidence(actor_traj, shoulder_width: float, req: MovementReq) -> fl
 
     disp = a[-1] - a[0]
     mag = float(np.linalg.norm(disp))
-    if mag < 1e-6:
+    mag_ratio = mag / shoulder_width
+    # Hard floor: a near-still hand (incidental jitter/repositioning) is never "linear motion",
+    # regardless of the sign's min_displacement_ratio.
+    if mag_ratio < 0.05:
         return 0.0
-    mag_score = float(np.clip((mag / shoulder_width) / req.min_displacement_ratio, 0.0, 1.0))
+    mag_score = float(np.clip(mag_ratio / req.min_displacement_ratio, 0.0, 1.0))
 
     unit = disp / mag
     dir_score = 1.0
@@ -112,25 +102,76 @@ def linear_confidence(actor_traj, shoulder_width: float, req: MovementReq) -> fl
 
 
 def repeated_confidence(actor_traj, shoulder_width: float, req: MovementReq) -> float:
-    if len(actor_traj) < 6:
+    if len(actor_traj) < 6 or shoulder_width is None or shoulder_width <= 0:
         return 0.0
     ts, a = _series(actor_traj)
     if ts[-1] - ts[0] < req.min_duration_s:
         return 0.0
 
+    # distance of the hand from the centroid of its own path
     signal = np.linalg.norm(a - a.mean(axis=0), axis=1)
-    signal = signal - signal.mean()
-    if np.allclose(signal, 0):
+
+    # A genuine repeated motion has real AMPLITUDE. Reject jitter / a near-still hand outright —
+    # this is what stops a barely-moving claw from racking up false "cycles" and passing.
+    amp_ratio = float(signal.max() - signal.min()) / shoulder_width
+    if amp_ratio < 0.05:
         return 0.0
-    signs = np.sign(signal)
-    signs[signs == 0] = 1
-    crossings = int(np.sum(np.abs(np.diff(signs)) > 0))
+
+    centered = signal - signal.mean()
+    # Count direction reversals only when the swing clears a noise band, so micro-wiggles near the
+    # mean don't inflate the cycle count.
+    noise = 0.25 * float(np.max(np.abs(centered)))
+    crossings, last = 0, 0
+    for v in centered:
+        if abs(v) < noise:
+            continue
+        cur = 1 if v > 0 else -1
+        if last != 0 and cur != last:
+            crossings += 1
+        last = cur
     cycles = crossings / 2.0
-    return float(np.clip(cycles / max(req.min_cycles, 1), 0.0, 1.0))
+
+    cycle_score = float(np.clip(cycles / max(req.min_cycles, 1), 0.0, 1.0))
+    amp_score = float(np.clip(amp_ratio / 0.08, 0.0, 1.0))
+    # Need BOTH enough cycles AND enough amplitude: a tiny tremor with many reversals fails on
+    # amplitude; a single big sweep with no reversals fails on cycles.
+    return float(min(cycle_score, amp_score))
+
+
+def converge_confidence(traj_a, traj_b, shoulder_width: float, req: MovementReq) -> float:
+    """How much the gap between two hands shrinks over the window.
+
+    `traj_a` and `traj_b` are aligned frame-by-frame trajectories for the two hands (only frames
+    where both are present). Returns ~0 for a static held-apart pose, approaching 1 as the hands
+    close by at least `req.min_approach_ratio` shoulder widths with a roughly steady approach.
+    """
+    n = min(len(traj_a), len(traj_b))
+    if n < 3 or shoulder_width <= 0:
+        return 0.0
+
+    ts = np.array([t for t, _ in traj_a[:n]], dtype=float)
+    if ts[-1] - ts[0] < req.min_duration_s:
+        return 0.0
+
+    pts_a = np.array([np.asarray(c, float) for _, c in traj_a[:n]])
+    pts_b = np.array([np.asarray(c, float) for _, c in traj_b[:n]])
+    gap = np.linalg.norm(pts_a - pts_b, axis=1) / shoulder_width
+
+    k = max(1, n // 4)
+    approach = float(np.mean(gap[:k])) - float(np.mean(gap[-k:]))   # positive = hands closing
+
+    mono = float(np.mean(np.diff(gap) < 0)) if n > 1 else 0.0
+
+    if req.min_approach_ratio > 0:
+        mag = float(np.clip(approach / req.min_approach_ratio, 0.0, 1.0))
+    else:
+        mag = 1.0 if approach > 0 else 0.0
+
+    return float(np.clip(mag * (0.5 + 0.5 * mono), 0.0, 1.0))
 
 
 def movement_confidence(actor_traj, shoulder_width: float, req: MovementReq) -> float:
-    """Dispatch on the required movement kind. NONE is trivially satisfied (no motion needed)."""
+    """Dispatch on the required movement kind. NONE trivially satisfied; CONVERGE uses two trajs."""
     if req.kind == MovementKind.NONE:
         return 1.0
     if req.kind == MovementKind.CIRCULAR:
@@ -139,4 +180,5 @@ def movement_confidence(actor_traj, shoulder_width: float, req: MovementReq) -> 
         return linear_confidence(actor_traj, shoulder_width, req)
     if req.kind == MovementKind.REPEATED:
         return repeated_confidence(actor_traj, shoulder_width, req)
+    # CONVERGE needs two trajectories — called directly from the verifier; return 0 if reached here.
     return 0.0

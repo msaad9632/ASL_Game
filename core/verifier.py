@@ -2,13 +2,11 @@
 
 verify(buffer, sign) returns a per-parameter breakdown PLUS an overall pass/fail. The overall
 pass requires EVERY parameter marked required to individually clear its own threshold. There is
-no averaging: a perfect handshape can never compensate for absent required movement. That gating
-is what makes the single-frame COFFEE bug impossible to reproduce.
+no averaging: a perfect handshape can never compensate for absent required movement.
 
-Role assignment (which detected hand is "dominant"/"nondominant") is a v1 heuristic: the hand
-that moved more across the window is the dominant/acting hand, the stiller one is non-dominant.
-This is handedness-agnostic and matches signs like COFFEE where one hand acts and one holds
-still. (A configurable dominant-hand setting can replace this later.)
+Role assignment: the hand that moved more across the window is DOMINANT; the stiller one is
+NONDOMINANT. This is handedness-agnostic and works for signs like COFFEE (one hand acts, one
+holds) and HELP (both rise, dominant tracks the higher-motion A-hand on top).
 """
 from __future__ import annotations
 
@@ -22,7 +20,6 @@ from core import orientation as ori
 from core.landmarks import RollingBuffer, normalized_distance
 from core.schema import DOMINANT, NONDOMINANT, Anchor, MovementKind, Sign
 
-# how much of the most-recent window to smooth handshape/location/orientation over
 SMOOTH_SECONDS = 0.5
 
 # Anchor.CHEST geometry, in shoulder-widths below the shoulder line.
@@ -52,12 +49,10 @@ class ParamScore:
 
     @property
     def cleared(self) -> bool:
-        """Did this parameter clear its own threshold (regardless of required)?"""
         return self.score >= self.threshold
 
     @property
     def passed(self) -> bool:
-        """Required params must clear; optional params never block the overall pass."""
         return (not self.required) or self.cleared
 
 
@@ -93,6 +88,17 @@ def _trajectory(buffer: RollingBuffer, handedness: str | None):
         if h is not None:
             out.append((f.t, h.center))
     return out
+
+
+def _aligned_pair(buffer: RollingBuffer, label_a: str, label_b: str):
+    """Frame-aligned (t, center) pairs for two hands (only frames where both are present)."""
+    traj_a, traj_b = [], []
+    for f in buffer:
+        ha, hb = f.hand(label_a), f.hand(label_b)
+        if ha is not None and hb is not None:
+            traj_a.append((f.t, ha.center))
+            traj_b.append((f.t, hb.center))
+    return traj_a, traj_b
 
 
 def _path_length(traj) -> float:
@@ -140,6 +146,31 @@ def _score_handshape(buffer, handedness, kind) -> float:
         if h is not None:
             vals.append(hs.handshape_confidence(h, kind))
     return float(np.median(vals)) if vals else 0.0
+
+
+def _best_fit_roles(buffer, sign: Sign, roles: dict) -> dict:
+    """Stabilize dominant/nondominant for two-handed signs with DIFFERENT handshapes.
+
+    assign_roles() picks the dominant hand by which one moved more — perfect for signs where one
+    hand acts and one holds (COFFEE), but unstable for signs where BOTH hands move together (HELP:
+    fist + open palm both lift). There the role labels flicker frame-to-frame, so the two handshape
+    scores keep swapping 1.0<->0.0 and never line up. When the two declared handshapes differ, we
+    instead keep whichever role assignment best FITS the declared shapes. Symmetric signs (COFFEE =
+    fist+fist) and one-handed signs are left exactly as assign_roles returned them.
+    """
+    if not sign.two_handed or sign.nondominant is None:
+        return roles
+    if sign.dominant.kind == sign.nondominant.kind:
+        return roles
+    dl, nl = roles.get(DOMINANT), roles.get(NONDOMINANT)
+    if dl is None or nl is None:
+        return roles
+    dk, nk = sign.dominant.kind, sign.nondominant.kind
+    current = min(_score_handshape(buffer, dl, dk), _score_handshape(buffer, nl, nk))
+    swapped = min(_score_handshape(buffer, nl, dk), _score_handshape(buffer, dl, nk))
+    if swapped > current:
+        return {DOMINANT: nl, NONDOMINANT: dl}
+    return roles
 
 
 def _score_location(buffer, sign: Sign, roles, shoulder_width) -> float:
@@ -192,7 +223,7 @@ def _score_location(buffer, sign: Sign, roles, shoulder_width) -> float:
 
 
 def _band_score(d: float, lo: float, hi: float) -> float:
-    """1.0 inside [lo, hi]; falls off smoothly outside (over a one-band-width margin)."""
+    """1.0 inside [lo, hi]; falls off smoothly outside."""
     if lo <= d <= hi:
         return 1.0
     span = max(hi - lo, hi, 1e-6)
@@ -249,6 +280,13 @@ def _score_movement(buffer, sign: Sign, roles, shoulder_width) -> float:
     actor_traj = _trajectory(buffer, actor_label)
     if shoulder_width is None or not actor_traj:
         return 0.0
+    if req.kind == MovementKind.CONVERGE:
+        # Two-hand movement: need aligned trajectories for both hands.
+        ndom_label = roles.get(NONDOMINANT)
+        if ndom_label is None:
+            return 0.0
+        traj_a, traj_b = _aligned_pair(buffer, actor_label, ndom_label)
+        return mv.converge_confidence(traj_a, traj_b, shoulder_width, req)
     return mv.movement_confidence(actor_traj, shoulder_width, req)
 
 
@@ -267,7 +305,7 @@ def _score_orientation(buffer, sign: Sign, roles) -> float:
 
 # ------------------------------------------------------------------ public API
 def movement_debug(buffer: RollingBuffer, sign: Sign) -> str:
-    """One-line readout of the live movement sub-metrics, for the dev demo / calibration."""
+    """One-line readout of live movement sub-metrics for the dev demo / calibration."""
     req = sign.movement
     if req.kind == MovementKind.NONE:
         return "static (no movement required)"
@@ -279,6 +317,17 @@ def movement_debug(buffer: RollingBuffer, sign: Sign) -> str:
         return (f"rot {m.net_rotation_deg:3.0f}/{req.min_total_rotation_deg:.0f}deg  "
                 f"radCV {m.radius_cv:0.2f}(full<0.30)  r/sw {m.mean_r_ratio:0.2f}  "
                 f"frames {m.n}  {m.duration:0.1f}s")
+    if req.kind == MovementKind.CONVERGE:
+        ndom_label = roles.get(NONDOMINANT)
+        if ndom_label and sw:
+            traj_a, traj_b = _aligned_pair(buffer, roles.get(req.actor), ndom_label)
+            n = min(len(traj_a), len(traj_b))
+            if n >= 2:
+                pts_a = np.array([c for _, c in traj_a[:n]], float)
+                pts_b = np.array([c for _, c in traj_b[:n]], float)
+                gap = np.linalg.norm(pts_a - pts_b, axis=1) / sw
+                return f"converge: gap {gap[0]:.2f}->{gap[-1]:.2f}sw  n={n}"
+        return "converge: waiting for both hands"
     return f"{req.kind.value}: {len(traj)} samples"
 
 
@@ -311,7 +360,7 @@ def location_debug(buffer: RollingBuffer, sign: Sign) -> str:
 
 
 def verify(buffer: RollingBuffer, sign: Sign) -> VerifyResult:
-    roles = assign_roles(buffer)
+    roles = _best_fit_roles(buffer, sign, assign_roles(buffer))
     sw = _latest_shoulder_width(buffer)
     params: list[ParamScore] = []
 
