@@ -19,18 +19,38 @@ structurally prevented. See [CLAUDE.md](CLAUDE.md).)
 
 ```
 ASL_Game/
-├── core/            # SHARED recognition engine (never duplicated per scenario)
-├── signs/           # sign definitions as data
+├── core/            # SHARED engine — recognition AND synthesis (never duplicated per scenario)
+├── signs/           # sign definitions as data (one schema drives both directions)
 ├── scenarios/
 │   ├── coffee_shop/   # Saad's themed scenario (presentation + assets only)
 │   └── hospital_shop/ # hospital scenario (see scenarios/hospital_shop/README.md)
-├── tools/           # landmark fixture recorder
-├── tests/           # confusor regression tests
+├── tools/           # landmark fixture recorder + procedural-avatar demo
+├── tests/           # confusor + synthesis round-trip regression tests
+├── docs/            # SYNTHESIS.md — the procedural avatar pipeline
 └── models/          # MediaPipe .task model files (downloaded, git-ignored)
 ```
 
 `core/` does recognition and is shared by every scenario. `scenarios/<name>/` only owns its
 look (background, prompts, animations). This split is deliberate — see [CLAUDE.md](CLAUDE.md).
+
+## The expressive side: procedural avatar synthesis
+
+The same `signs/*.py` schema that **recognizes** a sign can also **generate** it. `core/synthesis.py`
+reads a `Sign` and procedurally produces the reference clip a learner watches — deterministic
+handshape presets + trajectory math + analytical 2-bone IK, no trained model. Because both directions
+share one schema, every sign is **round-tripped**: synthesize it → the verifier must recognize it; freeze
+it → the verifier must reject it (the single-frame bug, caught from the synthesis side too).
+
+```bash
+python -m tools.synthesize_demo                 # render reference_clips/*.mp4 + calibration table
+python -m tools.synthesize_demo COFFEE --scores # one word, with the verifier scorecard burned in
+python -m tools.synthesize_demo COFFEE --scores --static  # + its frozen "confusor" (movement goes red)
+```
+The MP4s play at half-speed and loop, with an optional on-screen scorecard (handshape / location /
+movement bars + PASS/FAIL) so you can confirm a pose is correct visually *and* numerically.
+
+Full write-up — and how it maps to the procedural-avatar report's phases — in
+[docs/SYNTHESIS.md](docs/SYNTHESIS.md).
 
 ## Setup
 
@@ -141,7 +161,13 @@ Engine-level shared constants live in `core/` (e.g. `_RADIUS_CV_FREE` in `core/m
 
 ## Roadmap
 
-- **v1 (now):** rule-based math, Python desktop, scenario by scenario.
+- **v1 (now):** rule-based math, Python desktop, scenario by scenario. Recognition **and** a
+  deterministic procedural-avatar prototype (`core/synthesis.py`, see
+  [docs/SYNTHESIS.md](docs/SYNTHESIS.md)) — both driven by one shared schema.
+- **Avatar (deferred per the report's reality check):** a rigged glTF/GLB avatar + browser Three.js
+  runtime, and procedural facial non-manual markers. The math (presets, easing, parametric curves,
+  analytical 2-bone IK) already ports directly; the reference slot is medium-agnostic, so recorded
+  human clips and procedural clips mix per-sign.
 - **Robustness:** per-user calibration, then a learned classifier where rules get fragile —
   MediaPipe Model Maker for static handshapes, a small LSTM/GRU/1D-CNN over the landmark window
   for movement signs. Both still run client-side on landmarks and slot into the same `verify()`

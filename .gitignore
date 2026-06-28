@@ -35,3 +35,8 @@ htmlcov/
 
 # --- Claude Code local (per-machine) settings ---
 .claude/settings.local.json
+
+# --- Generated procedural-avatar reference clips + calibration log (regenerate via
+#     tools/synthesize_demo.py; not source of truth) ---
+reference_clips/
+calibration_log.json
