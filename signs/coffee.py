@@ -27,8 +27,8 @@ from core.schema import (
 COFFEE = Sign(
     name="COFFEE",
     two_handed=True,
-    dominant=HandShapeReq(kind="fist", required=True),
-    nondominant=HandShapeReq(kind="fist", required=True),
+    dominant=HandShapeReq(kind="fist", required=True, min_confidence=0.5),    # moving fist dips while grinding
+    nondominant=HandShapeReq(kind="fist", required=True, min_confidence=0.5),
     location=LocationReq(
         anchor=Anchor.OTHER_HAND,
         acting_hand=DOMINANT,

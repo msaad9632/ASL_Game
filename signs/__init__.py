@@ -5,9 +5,17 @@ drive prompts by sign name). Coffee-shop signs and hospital signs all live here 
 share the same verifier without duplicating logic.
 """
 from signs.coffee import COFFEE
+from signs.hello import HELLO
 from signs.letter_a import LETTER_A
+from signs.letter_b import LETTER_B
+from signs.letter_l import LETTER_L
+from signs.letter_v import LETTER_V
+from signs.letter_y import LETTER_Y
 from signs.please import PLEASE
 from signs.thank_you import THANK_YOU
+from signs.want import WANT
+from signs.yes import YES
+from signs.you import YOU
 
 # Hospital scenario signs
 from signs.help import HELP
@@ -29,17 +37,18 @@ HOSPITAL_SIGNS = (
     DOCTOR, NURSE, SICK, FEVER, WATER, BREATHE, HOSPITAL, DIZZY,
 )
 
-SIGNS = {
-    COFFEE.name: COFFEE,
-    LETTER_A.name: LETTER_A,
-    PLEASE.name: PLEASE,
-    THANK_YOU.name: THANK_YOU,
-    **{s.name: s for s in HOSPITAL_SIGNS},
-}
+# Coffee-shop vocabulary (used by that scenario's lessons).
+COFFEE_SIGNS = (
+    COFFEE, PLEASE, THANK_YOU, HELLO, WANT, YES,
+    LETTER_A, LETTER_B, LETTER_L, LETTER_V, LETTER_Y, YOU,
+)
+
+SIGNS = {s.name: s for s in (*COFFEE_SIGNS, *HOSPITAL_SIGNS)}
 
 __all__ = [
-    "COFFEE", "LETTER_A", "PLEASE", "THANK_YOU",
+    "COFFEE", "PLEASE", "THANK_YOU", "HELLO", "WANT", "YES",
+    "LETTER_A", "LETTER_B", "LETTER_L", "LETTER_V", "LETTER_Y", "YOU",
     "HELP", "PAIN", "MEDICINE", "EMERGENCY",
     "DOCTOR", "NURSE", "SICK", "FEVER", "WATER", "BREATHE", "HOSPITAL", "DIZZY",
-    "HOSPITAL_SIGNS", "SIGNS",
+    "COFFEE_SIGNS", "HOSPITAL_SIGNS", "SIGNS",
 ]
