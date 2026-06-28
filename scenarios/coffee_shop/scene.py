@@ -1,9 +1,9 @@
 """Coffee-shop presentation/theme.
 
-Draws the gamified screen: a coffee-shop background (assets/background.png if present, else a
-procedural cafe), the order-prompt banner, a picture-in-picture webcam, the score HUD, and a
-success animation (green flash + a coffee cup that fills). Recognition is NOT here — this module
-only renders. It consumes a VerifyResult; it never decides pass/fail itself.
+Renders the gamified screen from a GameSession: a coffee-shop background, a top HUD (level name,
+prompt progress bar, level score + running total), the current prompt, a picture-in-picture
+webcam, a success "+10" flash, a level-complete card, and a finished summary. Recognition is NOT
+here — this only renders the session state it's given.
 """
 from __future__ import annotations
 
@@ -16,11 +16,20 @@ from core import game
 
 ASSETS = Path(__file__).parent / "assets"
 
+FONT = cv2.FONT_HERSHEY_SIMPLEX
+INK = (245, 245, 245)
+ACCENT = (80, 220, 255)
+GOOD = (80, 210, 90)
+
+
+def _center(canvas, text, y, scale, color, thick=2):
+    (tw, _), _ = cv2.getTextSize(text, FONT, scale, thick)
+    cv2.putText(canvas, text, ((canvas.shape[1] - tw) // 2, y), FONT, scale, color, thick, cv2.LINE_AA)
+
 
 class CoffeeShopScene:
     def __init__(self, width: int = 1280, height: int = 720):
-        self.W = width
-        self.H = height
+        self.W, self.H = width, height
         self.bg = self._load_or_make_background()
 
     # ----------------------------------------------------------------- background
@@ -35,64 +44,78 @@ class CoffeeShopScene:
     def _procedural_background(self):
         W, H = self.W, self.H
         bg = np.zeros((H, W, 3), np.uint8)
-        # warm wall, vertical gradient (BGR)
         for y in range(H):
             f = y / H
             bg[y, :] = (int(70 + 25 * f), int(95 + 35 * f), int(120 + 45 * f))
-        # counter along the bottom
-        cv2.rectangle(bg, (0, int(H * 0.72)), (W, H), (45, 60, 90), -1)
-        cv2.rectangle(bg, (0, int(H * 0.72)), (W, int(H * 0.72) + 12), (28, 38, 60), -1)
-        # chalkboard menu (top-right)
-        x1, y1, x2, y2 = int(W * 0.60), int(H * 0.14), int(W * 0.93), int(H * 0.55)
-        cv2.rectangle(bg, (x1, y1), (x2, y2), (32, 32, 32), -1)
-        cv2.rectangle(bg, (x1, y1), (x2, y2), (70, 85, 110), 6)
-        cv2.putText(bg, "MENU", (x1 + 26, y1 + 46),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (235, 235, 235), 2, cv2.LINE_AA)
-        for i, item in enumerate(("Coffee", "Latte", "Espresso", "Mocha")):
-            cv2.putText(bg, f"- {item}", (x1 + 26, y1 + 90 + i * 36),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 210, 210), 1, cv2.LINE_AA)
-        # cafe name + a cup icon
-        cv2.putText(bg, "THE CODE CAFE", (40, int(H * 0.46)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.4, (245, 245, 245), 3, cv2.LINE_AA)
-        self._draw_cup(bg, cx=120, cy=int(H * 0.60), w=120, h=120, fill=0.0)
+        cv2.rectangle(bg, (0, int(H * 0.74)), (W, H), (45, 60, 90), -1)
+        cv2.rectangle(bg, (0, int(H * 0.74)), (W, int(H * 0.74) + 12), (28, 38, 60), -1)
+        cv2.putText(bg, "THE CODE CAFE", (40, int(H * 0.70)), FONT, 1.1, (210, 215, 220), 2, cv2.LINE_AA)
         return bg
 
-    # ----------------------------------------------------------------- coffee cup
-    def _draw_cup(self, img, cx, cy, w, h, fill: float):
-        """A simple mug outline filled `fill` (0..1) with coffee."""
-        x1, y1, x2, y2 = cx, cy, cx + w, cy + h
-        # coffee fill (from the bottom up)
-        fill = float(np.clip(fill, 0.0, 1.0))
-        if fill > 0:
-            fy = int(y2 - (y2 - y1 - 8) * fill)
-            cv2.rectangle(img, (x1 + 6, fy), (x2 - 6, y2 - 6), (35, 70, 110), -1)
-        # mug body + handle
-        cv2.rectangle(img, (x1, y1), (x2, y2), (230, 230, 230), 3)
-        cv2.ellipse(img, (x2 + 14, (y1 + y2) // 2), (16, 26), 0, -90, 90, (230, 230, 230), 3)
+    # ----------------------------------------------------------------- HUD pieces
+    def _hud(self, canvas, session):
+        # translucent top bar
+        ov = canvas.copy()
+        cv2.rectangle(ov, (0, 0), (self.W, 110), (32, 26, 22), -1)
+        cv2.addWeighted(ov, 0.6, canvas, 0.4, 0, canvas)
+        # level name + prompt counter
+        cv2.putText(canvas, session.level.name, (24, 38), FONT, 0.8, INK, 2, cv2.LINE_AA)
+        cv2.putText(canvas, f"Sign {session.prompt_number} / {session.level_len}", (24, 68),
+                    FONT, 0.6, (190, 200, 215), 1, cv2.LINE_AA)
+        # progress bar
+        bx, by, bw = 24, 84, 360
+        frac = (session.prompt_idx) / max(session.level_len, 1)
+        cv2.rectangle(canvas, (bx, by), (bx + bw, by + 12), (70, 70, 80), -1)
+        cv2.rectangle(canvas, (bx, by), (bx + int(bw * frac), by + 12), GOOD, -1)
+        # scores (right)
+        cv2.putText(canvas, f"Level: {session.level_score}/{session.level_max}", (self.W - 300, 40),
+                    FONT, 0.7, ACCENT, 2, cv2.LINE_AA)
+        cv2.putText(canvas, f"TOTAL: {session.total_score}", (self.W - 300, 74),
+                    FONT, 0.8, (90, 230, 140), 2, cv2.LINE_AA)
 
-    # ----------------------------------------------------------------- render
-    def render(self, cam_bgr, prompt_text: str, score: int, state: str,
-               success_progress: float = 0.0, debug_overlay=None, success_text: str = "CORRECT!"):
-        canvas = self.bg.copy()
-        game.draw_banner(canvas, "Customer order:", prompt_text)
-        game.draw_score(canvas, score, label="Score")
+    def _prompt(self, canvas, session):
+        p = session.prompt
+        _center(canvas, p.sign.name.replace("_", " "), 230, 1.6, INK, 3)
+        _center(canvas, p.text, 280, 0.7, (200, 210, 230), 2)
 
-        # the "current order" cup near the counter fills while a success plays
-        cup_fill = success_progress if state == "success" else 0.0
-        self._draw_cup(canvas, cx=int(self.W * 0.40), cy=int(self.H * 0.50),
-                       w=110, h=110, fill=cup_fill)
-
+    # ----------------------------------------------------------------- screens
+    def _render_play(self, canvas, session, cam_bgr, now, debug_overlay):
+        self._hud(canvas, session)
+        self._prompt(canvas, session)
         game.composite_pip(canvas, cam_bgr)
-
-        if state == "success":
-            game.flash(canvas, 0.45 * (1.0 - success_progress), (60, 200, 60))
-            (tw, _), _ = cv2.getTextSize(success_text, cv2.FONT_HERSHEY_SIMPLEX, 1.4, 3)
-            cv2.putText(canvas, success_text, ((self.W - tw) // 2, self.H // 2),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.4, (255, 255, 255), 3, cv2.LINE_AA)
-
+        if session.state == "success":
+            prog = session.success_progress(now)
+            game.flash(canvas, 0.45 * (1.0 - prog), GOOD)
+            _center(canvas, "CORRECT!  +10", self.H // 2 + 30, 1.5, INK, 3)
         if debug_overlay is not None:
             result, move_dbg = debug_overlay
             from core.overlay import draw_param_scores
-            draw_param_scores(canvas, result, move_dbg, y0=112)   # below the top banner
+            draw_param_scores(canvas, result, move_dbg, y0=124)
 
+    def _render_card(self, canvas, session):
+        ov = canvas.copy(); cv2.rectangle(ov, (0, 0), (self.W, self.H), (20, 18, 16), -1)
+        cv2.addWeighted(ov, 0.7, canvas, 0.3, 0, canvas)
+        _center(canvas, "LEVEL COMPLETE", self.H // 2 - 70, 1.6, GOOD, 3)
+        _center(canvas, session.level.name, self.H // 2 - 10, 0.9, INK, 2)
+        _center(canvas, f"Score  {session.level_score} / {session.level_max}", self.H // 2 + 45, 1.1, ACCENT, 2)
+        nxt = session.level_idx + 1
+        if nxt < len(session.levels):
+            _center(canvas, f"Next:  {session.levels[nxt].name}", self.H // 2 + 110, 0.7, (200, 210, 230), 2)
+
+    def _render_finished(self, canvas, session):
+        ov = canvas.copy(); cv2.rectangle(ov, (0, 0), (self.W, self.H), (20, 18, 16), -1)
+        cv2.addWeighted(ov, 0.75, canvas, 0.25, 0, canvas)
+        _center(canvas, "LESSON COMPLETE!", self.H // 2 - 60, 1.7, (90, 230, 140), 3)
+        _center(canvas, f"Total score:  {session.total_score}", self.H // 2 + 10, 1.2, ACCENT, 2)
+        _center(canvas, "press R to play again   -   Q to quit", self.H // 2 + 80, 0.7, (200, 210, 230), 2)
+
+    # ----------------------------------------------------------------- entry
+    def render(self, session, cam_bgr, now: float, debug_overlay=None):
+        canvas = self.bg.copy()
+        if session.state in ("playing", "success"):
+            self._render_play(canvas, session, cam_bgr, now, debug_overlay)
+        elif session.state == "level_complete":
+            self._render_card(canvas, session)
+        elif session.state == "finished":
+            self._render_finished(canvas, session)
         return canvas

@@ -54,8 +54,10 @@ look (background, prompts, animations). This split is deliberate — see [CLAUDE
 python -m scenarios.coffee_shop.main            # play
 python -m scenarios.coffee_shop.main --debug    # + live per-parameter score bars
 ```
-The customer asks for a series of signs — **COFFEE → PLEASE → THANK YOU** — looping forever.
-Perform each correctly to earn **+10** and advance to the next. Press `q` to quit.
+A lesson of **3 levels / 12 signs** — Greetings (HELLO, PLEASE, THANK YOU, YOU), Cafe Order
+(COFFEE, WANT, YES), Fingerspelling (A, B, L, V, Y). Each correct sign earns **+10**; finish a
+level for a level-complete card, then the next, ending in a total-score summary. Press `r` to
+replay, `q` to quit.
 
 **Play the hospital scenario:**
 ```bash

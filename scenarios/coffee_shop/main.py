@@ -1,9 +1,8 @@
 """Coffee-shop scenario entry point.
 
-A multi-sign game loop: the customer asks for a series of signs (COFFEE -> PLEASE -> THANK YOU),
-the player performs each, earns POINTS_PER_SIGN for a correct one, and the game advances to the
-next prompt and loops forever. Success fires ONLY on an overall verifier pass (every required
-parameter cleared) — never a single frame.
+A lesson of 3 levels (12 signs): Greetings, Cafe Order, Fingerspelling. Each correct sign earns
++10, advances, and rolls into a level-complete card then the next level, ending in a summary.
+Success fires ONLY on an overall verifier pass (every required parameter cleared).
 
 Run:
     python -m scenarios.coffee_shop.main            # play
@@ -18,19 +17,36 @@ import cv2
 
 from core.capture import Capture
 from core.landmarks import HandStabilizer, RollingBuffer
+from core.lesson import GameSession, Level, Prompt
 from core.verifier import movement_debug, verify
 from scenarios.coffee_shop.scene import CoffeeShopScene
-from signs import COFFEE, PLEASE, THANK_YOU
+from signs import (
+    COFFEE, HELLO, LETTER_A, LETTER_B, LETTER_L, LETTER_V, LETTER_Y,
+    PLEASE, THANK_YOU, WANT, YES, YOU,
+)
 
-SUCCESS_SECONDS = 1.6
-POINTS_PER_SIGN = 10
 
-# the order the customer asks for; loops forever
-PROMPTS = [
-    (COFFEE, "Order a COFFEE - grind your fists, one over the other"),
-    (PLEASE, "Say PLEASE - open hand circling on your chest"),
-    (THANK_YOU, "Say THANK YOU - open hand from your chin, moving down"),
-]
+def build_levels() -> list[Level]:
+    return [
+        Level("Greetings", [
+            Prompt(HELLO, "Wave HELLO - open hand, wave side to side"),
+            Prompt(PLEASE, "PLEASE - open hand, circle on your chest"),
+            Prompt(THANK_YOU, "THANK YOU - open hand from your chin, move down"),
+            Prompt(YOU, "YOU - point your index finger forward"),
+        ]),
+        Level("Cafe Order", [
+            Prompt(COFFEE, "COFFEE - two fists, grind the top over the bottom"),
+            Prompt(WANT, "WANT - both open hands, pull down toward you"),
+            Prompt(YES, "YES - a fist, nod it up and down"),
+        ]),
+        Level("Fingerspelling", [
+            Prompt(LETTER_A, "Letter A - a fist with the thumb at the side"),
+            Prompt(LETTER_B, "Letter B - flat open hand, fingers together"),
+            Prompt(LETTER_L, "Letter L - index up, thumb out"),
+            Prompt(LETTER_V, "Letter V - index and middle up (peace)"),
+            Prompt(LETTER_Y, "Letter Y - thumb and pinky out"),
+        ]),
+    ]
 
 
 def main(camera_index: int = 0, debug: bool = False) -> None:
@@ -41,10 +57,7 @@ def main(camera_index: int = 0, debug: bool = False) -> None:
 
     buffer = RollingBuffer(window_seconds=2.0)
     stabilizer = HandStabilizer(hold_seconds=0.3)
-    score = 0
-    idx = 0                       # which prompt we're on
-    state = "playing"            # "playing" | "success"
-    success_start = 0.0
+    session = GameSession(build_levels())
     t0 = time.monotonic()
 
     win = "ASL Coffee Shop"
@@ -62,32 +75,28 @@ def main(camera_index: int = 0, debug: bool = False) -> None:
             frame = stabilizer.stabilize(frame)
             buffer.add(frame)
 
-            sign, prompt = PROMPTS[idx]
-            result = verify(buffer, sign)
             now = time.monotonic()
+            debug_overlay = None
+            if session.state == "playing":
+                sign = session.prompt.sign
+                result = verify(buffer, sign)
+                if result.passed:
+                    session.on_pass(now)
+                    buffer.clear()
+                    stabilizer.reset()
+                if debug:
+                    debug_overlay = (result, movement_debug(buffer, sign))
+            session.update(now)
 
-            if state == "playing" and result.passed:
-                state = "success"
-                success_start = now
-                score += POINTS_PER_SIGN
-                buffer.clear()
-                stabilizer.reset()
-
-            progress = 0.0
-            if state == "success":
-                progress = (now - success_start) / SUCCESS_SECONDS
-                if progress >= 1.0:
-                    state = "playing"
-                    idx = (idx + 1) % len(PROMPTS)     # advance to the next sign, loop forever
-
-            canvas = scene.render(
-                bgr, prompt, score, state, progress,
-                debug_overlay=(result, movement_debug(buffer, sign)) if debug else None,
-                success_text=f"CORRECT!  +{POINTS_PER_SIGN}",
-            )
+            canvas = scene.render(session, bgr, now, debug_overlay)
             cv2.imshow(win, canvas)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
                 break
+            if key == ord("r") and session.state == "finished":
+                session = GameSession(build_levels())     # replay
+                buffer.clear(); stabilizer.reset()
 
     cap.release()
     cv2.destroyAllWindows()
