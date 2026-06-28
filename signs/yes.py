@@ -11,5 +11,5 @@ YES = Sign(
     dominant=HandShapeReq(kind="fist", required=True),
     nondominant=None,
     location=LocationReq(anchor=Anchor.NEUTRAL_SPACE, acting_hand=DOMINANT, max_dist_ratio=3.0, required=False),
-    movement=MovementReq(kind=MovementKind.REPEATED, actor=DOMINANT, min_cycles=1, min_duration_s=0.4, required=True),
+    movement=MovementReq(kind=MovementKind.REPEATED, actor=DOMINANT, min_cycles=2, min_duration_s=0.6, required=True),
 )
