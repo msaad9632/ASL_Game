@@ -34,7 +34,7 @@ _ANCHOR_BASE = {
     Anchor.SHOULDER:      ("Spine2", np.array([-0.40, 0.05, 0.55])),
 }
 # OTHER_HAND: non-dominant 'anvil' base, and the dominant hand's offset from it.
-_NDOM_BASE = ("Spine1", np.array([0.0, -0.20, 0.82]))
+_NDOM_BASE = ("Spine1", np.array([0.0, 0.02, 0.80]))   # lower fist at lower-chest, not the belly
 _FOREARM_FWD = 0.0
 
 # default 3D linear stroke direction per anchor (body frame), kept near the anchor band
