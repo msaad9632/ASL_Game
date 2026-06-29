@@ -95,9 +95,14 @@ export const LETTER_Y = createSign({
 export const HELP = createSign({
   name: 'HELP', twoHanded: true,
   dominant: { kind: 'fist', required: true, minConfidence: 0.5 },
-  nondominant: { kind: 'open', required: true, minConfidence: 0.5 },
-  location: { anchor: Anchor.OTHER_HAND, actingHand: DOMINANT, maxDistRatio: 0.60, required: true, minConfidence: 0.5 },
-  movement: { kind: MovementKind.LINEAR, actor: DOMINANT, direction: [0, -1], minDisplacementRatio: 0.15, minDurationS: 0.4, minConfidence: 0.5, required: true },
+  nondominant: { kind: 'open', required: true, minConfidence: 0.45 },
+  // maxDistRatio 0.80 lets the lifted fist move higher before location fails
+  location: { anchor: Anchor.OTHER_HAND, actingHand: DOMINANT, maxDistRatio: 0.80, required: true, minConfidence: 0.5 },
+  // No direction: the net-displacement vector spans the full 2 s buffer including the
+  // approach phase, which dilutes the upward component and kills dirScore. Removing the
+  // direction check means any deliberate movement (lift, press, push) while fist is near
+  // palm will pass — the two-handed position requirement is specific enough.
+  movement: { kind: MovementKind.LINEAR, actor: DOMINANT, minDisplacementRatio: 0.12, minDurationS: 0.3, minConfidence: 0.45, required: true },
   orientation: { hand: NONDOMINANT, facing: PalmFacing.UP, required: false },
 });
 
