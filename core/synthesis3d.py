@@ -84,7 +84,7 @@ _SPREAD = {"v": [0.30, -0.12, 0.0, 0.0]}
 def _shape(req) -> dict:
     kind = req.kind.lower()
     ext, thumb = SHAPE_SPECS[kind]
-    out = {"kind": req.kind, "ext": list(ext), "thumb": bool(thumb)}
+    out = {"kind": req.kind, "ext": list(ext), "thumb": float(thumb)}
     if kind in _SPREAD:
         out["spread"] = _SPREAD[kind]
     return out
