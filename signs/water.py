@@ -33,11 +33,9 @@ WATER = Sign(
         max_dist_ratio=0.5,
         required=True,
     ),
-    movement=MovementReq(
-        kind=MovementKind.REPEATED,
-        actor=DOMINANT,
-        min_cycles=2,
-        min_duration_s=0.5,
-        required=True,
-    ),
+    # The chin-TAP barely moves the palm centre (it's a fingertip motion), so it is indistinguishable
+    # from jitter and can't be gated without false positives. WATER is therefore recognised as the
+    # distinctive "W reaching the chin" pose (a static sign, like the fingerspelled letters); the
+    # 3-finger W + the chin location are unambiguous on their own.
+    movement=MovementReq(kind=MovementKind.NONE, required=False),
 )

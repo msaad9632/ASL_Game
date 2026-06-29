@@ -181,7 +181,7 @@ def medicine_clip(mode: str) -> list[Frame]:
         nd = ndom.copy()
         if mode == "idle":
             dom, nd = dom + _jit(), nd + _jit()
-        out.append(_frame(t, [make_hand("Right", dom, "claw"), make_hand("Left", nd, "open")]))
+        out.append(_frame(t, [make_hand("Right", dom, "open"), make_hand("Left", nd, "open")]))
     return out
 
 
@@ -234,14 +234,14 @@ def fever_clip(mode: str) -> list[Frame]:
 
 
 def water_clip(mode: str) -> list[Frame]:
-    out = []
-    for t in _ts():
-        dy = 22.0 * math.sin(2 * math.pi * 1.5 * t) if mode == "correct" else 0.0
-        dom = np.array([CX, Y_CHIN + dy])            # taps at the chin
-        if mode == "idle":
-            dom = dom + _jit()
-        out.append(_frame(t, [make_hand("Right", dom, "w")]))
-    return out
+    """WATER is a static "W reaching the chin" pose. Modes:
+       correct    — W handshape at the chin              (PASS)
+       wrongshape — OPEN hand at the chin                (FAIL on handshape)
+       offchin    — W handshape down at the chest        (FAIL on location)
+    """
+    shape = "open" if mode == "wrongshape" else "w"
+    y = Y_CHEST if mode == "offchin" else Y_CHIN
+    return [_frame(t, [make_hand("Right", [CX, y], shape)]) for t in _ts()]
 
 
 def breathe_clip(mode: str) -> list[Frame]:
@@ -279,7 +279,7 @@ def dizzy_clip(mode: str) -> list[Frame]:
         dom = np.array([cx + r * math.cos(ang), cy + r * math.sin(ang)])
         if mode == "idle":
             dom = dom + _jit()
-        out.append(_frame(t, [make_hand("Right", dom, "claw")]))
+        out.append(_frame(t, [make_hand("Right", dom, "open")]))   # signer circles an OPEN hand
     return out
 
 
@@ -311,7 +311,6 @@ BUILDERS = {
     "doctor": ("DOCTOR", doctor_clip),
     "nurse": ("NURSE", nurse_clip),
     "fever": ("FEVER", fever_clip),
-    "water": ("WATER", water_clip),
     "breathe": ("BREATHE", breathe_clip),
     "hospital": ("HOSPITAL", hospital_clip),
     "dizzy": ("DIZZY", dizzy_clip),
@@ -324,10 +323,13 @@ def main() -> None:
         _write(f"{base}_correct", sign_name, builder("correct"))
         _write(f"{base}_confusor", sign_name, builder("confusor"))
         _write(f"{base}_idle", sign_name, builder("idle"))
-    # SICK is a static pose — its negatives exercise handshape and location instead of movement.
+    # Static signs — negatives exercise handshape and location instead of movement.
     _write("sick_correct", "SICK", sick_clip("correct"))
     _write("sick_wrongshape", "SICK", sick_clip("wrongshape"))
     _write("sick_lowhand", "SICK", sick_clip("lowhand"))
+    _write("water_correct", "WATER", water_clip("correct"))
+    _write("water_wrongshape", "WATER", water_clip("wrongshape"))
+    _write("water_offchin", "WATER", water_clip("offchin"))
 
 
 if __name__ == "__main__":

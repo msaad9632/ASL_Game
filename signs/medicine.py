@@ -30,7 +30,7 @@ from core.schema import (
 MEDICINE = Sign(
     name="MEDICINE",
     two_handed=True,
-    dominant=HandShapeReq(kind="claw", required=True, min_confidence=0.50),
+    dominant=HandShapeReq(kind="open", required=True, min_confidence=0.55),  # calibrated: signer uses an open hand, not a claw
     nondominant=HandShapeReq(kind="open", required=True, min_confidence=0.55),
     location=LocationReq(
         anchor=Anchor.OTHER_HAND,

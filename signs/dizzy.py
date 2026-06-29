@@ -27,7 +27,7 @@ from core.schema import (
 DIZZY = Sign(
     name="DIZZY",
     two_handed=False,
-    dominant=HandShapeReq(kind="claw", required=True, min_confidence=0.5),
+    dominant=HandShapeReq(kind="open", required=True, min_confidence=0.55),  # calibrated: signer circles an open hand, not a claw
     nondominant=None,
     location=LocationReq(
         anchor=Anchor.FOREHEAD,      # "in front of the face" — at/above the mouth

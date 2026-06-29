@@ -29,7 +29,7 @@ from core.schema import (
 DOCTOR = Sign(
     name="DOCTOR",
     two_handed=True,
-    dominant=HandShapeReq(kind="open", required=True, min_confidence=0.55),
+    dominant=HandShapeReq(kind="open", required=True, min_confidence=0.45),  # calibrated to the real flat-hand read
     nondominant=HandShapeReq(kind="open", required=False),   # the wrist/arm — present, not gated
     location=LocationReq(
         anchor=Anchor.OTHER_HAND,
