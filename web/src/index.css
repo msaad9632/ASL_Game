@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Zippy character palette ── */
+
+  /* Purple — brand / primary (body colour) */
+  --color-z-purple: #7C3AED;
+  --color-z-purple-dark: #5B21B6;
+  --color-z-purple-deep: #2D1464;
+  --color-z-purple-light: #A78BFA;
+  --color-z-purple-glow: #C4B5FD;
+
+  /* Orange — nose / streak / energy */
+  --color-z-orange: #F97316;
+  --color-z-orange-dark: #EA580C;
+  --color-z-orange-bright: #FDBA74;
+
+  /* Feroze / Teal — hair / XP / knowledge */
+  --color-z-teal: #14B8A6;
+  --color-z-teal-dark: #0F766E;
+  --color-z-teal-light: #5EEAD4;
+
+  /* z-yellow repurposed → teal-light so all XP text glows teal */
+  --color-z-yellow: #5EEAD4;
+
+  /* Status */
+  --color-z-green: #34D399;
+  --color-z-green-dark: #059669;
+  --color-z-red: #EF4444;
+  --color-z-blue: #60A5FA;
+  --color-z-cream: #FFF8E7;
+
+  /* Neutrals (subtle purple tint) */
+  --color-z-gray-50: #F5F3FF;
+  --color-z-gray-100: #EDE9FE;
+  --color-z-gray-200: #D4CCEF;
+  --color-z-gray-300: #A89BB5;
+  --color-z-gray-400: #7C6F8A;
+  --color-z-gray-500: #4C3D6B;
+
+  /* Surfaces — deeper purple-black to make the vivid purple pop */
+  --color-z-bg: #0D0A1E;
+  --color-z-card: #18103A;
+  --color-z-surface: #221548;
+  --color-z-surface-hover: #2D1B5C;
+
+  --font-sans: 'Quicksand', sans-serif;
+}
+
+@font-face {
+  font-family: 'Quicksand';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/quicksand/v31/6xK-dSZaM9iE8KbpRA_LJ3z8mH9BOJvgkP8o58a-xI.woff2') format('woff2');
+}
+
+body {
+  margin: 0;
+  background-color: #0D0A1E;
+  color: #F5F3FF;
+  font-family: 'Quicksand', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #221548;
+  border-radius: 3px;
+}
