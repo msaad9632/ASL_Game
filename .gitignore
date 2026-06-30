@@ -23,10 +23,7 @@ recordings/
 
 # --- ML dataset: bulk landmark extraction output (regenerable, huge with ASL Citizen).
 #     The small hand-recorded fixtures in tests/fixtures/ stay tracked; this bulk does not. ---
-data/landmarks/
-data/manifest.csv
-data/*.npy
-data/*.npz
+data/
 ml/runs/
 ml/inspect_out/
 calibration_log.json

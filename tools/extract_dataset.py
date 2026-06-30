@@ -27,10 +27,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import json
 import os
 import random
 import sys
+import tempfile
+import zipfile
 from pathlib import Path
 from typing import Optional
 
@@ -45,6 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.capture import Capture           # noqa: E402
 from core.landmarks import Frame           # noqa: E402
 from tools.oneeuro import OneEuroVector     # noqa: E402
+from tools.asl_citizen_vocab import GAME_VOCAB  # noqa: E402
 
 HAND_DIM = 63  # 21 landmarks * 3 coords
 
@@ -148,11 +152,13 @@ def run_dataset(args, capture: Capture, writer: "ManifestWriter") -> None:
 
 
 def _process_one(vp: Path, sign: str, signer: str, capture: Capture, args,
-                 writer: "ManifestWriter", split: str = "train") -> None:
+                 writer: "ManifestWriter", split: str = "train",
+                 stem: Optional[str] = None) -> None:
+    stem = stem or vp.stem
     out_dir = Path(args.out) / sign
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{vp.stem}.json"
-    clip_id = f"{sign}/{vp.stem}"
+    out_path = out_dir / f"{stem}.json"
+    clip_id = f"{sign}/{stem}"
 
     if out_path.exists() and not args.force:
         print(f"  = skip (exists): {clip_id}")
@@ -171,6 +177,68 @@ def _process_one(vp: Path, sign: str, signer: str, capture: Capture, args,
     stats = clip_stats(payload)
     writer.add(clip_id, sign, signer, split, stats)
     print(f"  + {clip_id}  frames={stats['n_frames']} cover={stats['hand_coverage']}")
+
+
+def run_asl_citizen(args, capture: Capture, writer: "ManifestWriter") -> None:
+    """Extract ASL Citizen using its OFFICIAL signer-disjoint splits.
+
+    Reads videos straight from the dataset zip (--zip) so no 42GB unzip is needed, or from an
+    already-extracted root (--root). With --vocab game, only the game-vocabulary glosses are
+    processed (Phase C staging) and folded to our engine sign ids via GAME_VOCAB.
+    """
+    use_vocab = args.vocab == "game"
+    rows: list[tuple[str, str, str, str]] = []  # (split, video_file, gloss, participant)
+
+    zf: Optional[zipfile.ZipFile] = None
+    members: set[str] = set()
+    if args.zip:
+        zf = zipfile.ZipFile(args.zip)
+        members = set(zf.namelist())
+        for sp in ("train", "val", "test"):
+            with zf.open(f"ASL_Citizen/splits/{sp}.csv") as f:
+                for r in csv.DictReader(io.TextIOWrapper(f, encoding="utf-8")):
+                    rows.append((sp, r["Video file"], r["Gloss"], r["Participant ID"]))
+    else:
+        root = Path(args.root)
+        for sp in ("train", "val", "test"):
+            with open(root / "splits" / f"{sp}.csv", newline="", encoding="utf-8") as f:
+                for r in csv.DictReader(f):
+                    rows.append((sp, r["Video file"], r["Gloss"], r["Participant ID"]))
+
+    if use_vocab:
+        rows = [r for r in rows if r[2] in GAME_VOCAB]
+
+    by_split = {sp: sum(1 for r in rows if r[0] == sp) for sp in ("train", "val", "test")}
+    print(f"[asl-citizen] {len(rows)} clips  (vocab={'game' if use_vocab else 'all'})  "
+          f"train={by_split['train']} val={by_split['val']} test={by_split['test']}")
+
+    for sp, vfile, gloss, signer in rows:
+        sign = GAME_VOCAB[gloss] if use_vocab else gloss.upper()
+        stem = Path(vfile).stem
+
+        if zf is not None:
+            member = f"ASL_Citizen/videos/{vfile}"
+            if member not in members:
+                print(f"  ! not in zip: {vfile}")
+                continue
+            # Extract the single member to a temp file so OpenCV can open it by path.
+            tmp_path = None
+            try:
+                with zf.open(member) as src, \
+                        tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+                    tmp.write(src.read())
+                    tmp_path = tmp.name
+                _process_one(Path(tmp_path), sign, signer, capture, args, writer,
+                             split=sp, stem=stem)
+            finally:
+                if tmp_path and os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+        else:
+            vp = Path(args.root) / "videos" / vfile
+            if not vp.exists():
+                print(f"  ! missing video, skipping: {vp}")
+                continue
+            _process_one(vp, sign, signer, capture, args, writer, split=sp, stem=stem)
 
 
 # ----------------------------------------------------------------------------- helpers
@@ -253,11 +321,23 @@ def main() -> None:
     pd.add_argument("--no-filter", action="store_true")
     pd.add_argument("--force", action="store_true")
 
+    pc = sub.add_parser("asl-citizen", help="extract ASL Citizen via its official splits")
+    src = pc.add_mutually_exclusive_group(required=True)
+    src.add_argument("--zip", help="read videos directly from the dataset zip (no unzip needed)")
+    src.add_argument("--root", help="path to an extracted ASL_Citizen/ dir (has videos/ + splits/)")
+    pc.add_argument("--vocab", choices=["game", "all"], default="game",
+                    help="game = only the game-vocabulary glosses (default); all = every gloss")
+    pc.add_argument("--out", default="data/landmarks")
+    pc.add_argument("--no-filter", action="store_true")
+    pc.add_argument("--force", action="store_true")
+
     args = p.parse_args()
     writer = ManifestWriter(args.out)
     with Capture() as capture:
         if args.mode == "footage":
             run_footage(args, capture, writer)
+        elif args.mode == "asl-citizen":
+            run_asl_citizen(args, capture, writer)
         else:
             run_dataset(args, capture, writer)
     writer.flush()
