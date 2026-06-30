@@ -10,11 +10,14 @@ Saad owns the coffee-shop scenario; a teammate owns another scenario.
   Solutions API) so concepts line up with `@mediapipe/tasks-vision` when recognition is ported
   to the browser later. Recognition is local/client-side by design — no video or landmark
   streaming to a server for recognition (latency + cloud cost).
-- **v1 sign recognition is RULE-BASED MATH, not a trained ML model.** We do NOT use WLASL or
-  ASLLVD (commercially restricted datasets) for anything. We plan to transition to an LSTM/GRU
-  later, once our own vocabulary and recorded landmark data grow past what hand-written rules
-  can cleanly distinguish. Keep collecting our own landmark recordings — that becomes our
-  proprietary training set.
+- **v1 sign recognition is RULE-BASED MATH; the trained ML model (Phase C) is a disambiguation
+  LAYER on top — it does not replace the rule engine or the per-parameter Sign Coach.**
+  Training datasets: **ASL Citizen** (licensed) and **WLASL** (authorized 2026-06-30 by owner
+  decision — supersedes the earlier "no WLASL" rule).
+  ⚠️ LICENSING CAVEAT: WLASL has non-commercial / research-oriented licensing and a history of
+  source-video takedowns. It is fine for model training and experiments, but **verify WLASL's
+  license terms before any COMMERCIAL release** of a model trained on it. We still do NOT use
+  ASLLVD. Keep collecting our own landmark recordings — that remains our proprietary set.
 - **Stack (v1):** Python, MediaPipe Hand + Pose (Tasks API), OpenCV (game UI + webcam), numpy
   (geometry). Future: React + TypeScript frontend, Supabase/Postgres for user progress — NOT
   for sign recognition.
