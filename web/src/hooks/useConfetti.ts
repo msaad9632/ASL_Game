@@ -7,7 +7,7 @@ export function useConfetti() {
       particleCount: 80,
       spread: 70,
       origin: { y: 0.6 },
-      colors: ['#7B2FBE', '#A855F7', '#F59E0B', '#FBBF24', '#34D399', '#FCD34D'],
+      colors: ['#7C3AED', '#A78BFA', '#F97316', '#FDBA74', '#14B8A6', '#5EEAD4'],
       disableForReducedMotion: true,
     });
   }, []);
@@ -20,7 +20,7 @@ export function useConfetti() {
         angle: 60,
         spread: 55,
         origin: { x: 0 },
-        colors: ['#7B2FBE', '#A855F7', '#F59E0B'],
+        colors: ['#7C3AED', '#A78BFA', '#F97316'],
         disableForReducedMotion: true,
       });
       confetti({
@@ -28,7 +28,7 @@ export function useConfetti() {
         angle: 120,
         spread: 55,
         origin: { x: 1 },
-        colors: ['#FBBF24', '#34D399', '#FCD34D'],
+        colors: ['#FDBA74', '#14B8A6', '#5EEAD4'],
         disableForReducedMotion: true,
       });
       if (Date.now() < end) requestAnimationFrame(frame);

@@ -1,4 +1,4 @@
-export type HandShapeKind = 'fist' | 's' | 'a' | 'index' | 'open' | 'claw' | 'v' | 'l' | 'y';
+export type HandShapeKind = 'fist' | 's' | 'a' | 'index' | 'open' | 'claw' | 'v' | 'l' | 'y' | 'w' | 'h' | 'n' | 'middle';
 
 export type Anchor =
   | 'other_hand'

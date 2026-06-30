@@ -9,7 +9,8 @@ lerna-debug.log*
 
 node_modules
 dist
-public/clips/*.mp4
+# clips and images are tracked (large videos compressed before commit)
+# public/clips/*.mp4  <-- removed: mp4 and images are now committed
 dist-ssr
 *.local
 

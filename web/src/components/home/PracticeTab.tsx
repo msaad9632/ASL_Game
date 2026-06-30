@@ -33,7 +33,7 @@ export function PracticeTab({ onStartPractice, onStartStory }: Props) {
       <motion.button
         onClick={onStartPractice}
         className="w-full rounded-2xl p-5 mb-3 text-left border border-white/5 overflow-hidden relative"
-        style={{ background: 'linear-gradient(135deg, #7B2FBE, #A855F7)' }}
+        style={{ background: 'linear-gradient(135deg, #5B21B6, #7C3AED)' }}
         whileHover={{ scale: 1.01 }}
         whileTap={{ scale: 0.98 }}
         initial={{ opacity: 0, y: 20 }}
@@ -58,7 +58,7 @@ export function PracticeTab({ onStartPractice, onStartStory }: Props) {
       <motion.button
         onClick={onStartStory}
         className="w-full rounded-2xl p-5 mb-3 text-left border border-white/5 overflow-hidden relative"
-        style={{ background: 'linear-gradient(135deg, #92400E, #F59E0B)' }}
+        style={{ background: 'linear-gradient(135deg, #0F766E, #14B8A6)' }}
         whileHover={{ scale: 1.01 }}
         whileTap={{ scale: 0.98 }}
         initial={{ opacity: 0, y: 20 }}
@@ -69,7 +69,7 @@ export function PracticeTab({ onStartPractice, onStartStory }: Props) {
         <div className="relative flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-white">Coffee Shop Story</h3>
-            <p className="text-amber-200 text-sm mt-1">
+            <p className="text-teal-100 text-sm mt-1">
               Chat with Zippy the barista in ASL
             </p>
           </div>

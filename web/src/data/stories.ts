@@ -62,4 +62,71 @@ export const COFFEE_SHOP_STORY: StoryScript = {
   ],
 };
 
-export const STORIES: StoryScript[] = [COFFEE_SHOP_STORY];
+export const HOSPITAL_STORY: StoryScript = {
+  id: 'hospital-story',
+  title: 'At the Hospital',
+  description: 'Help a patient communicate with the doctor',
+  npcName: 'Dr. Reeves',
+  npcEmoji: '🩺',
+  backgroundEmoji: '🏥',
+  lines: [
+    {
+      npcText: "A patient needs help — can you sign it?",
+      npcMood: 'neutral',
+      requiredSignId: 'HELP',
+      hint: 'Fist on palm, lift it up!',
+      npcResponse: "Great — I can see you know ASL. Let's communicate!",
+    },
+    {
+      npcText: "Where is the pain?",
+      npcMood: 'curious',
+      requiredSignId: 'PAIN',
+      hint: 'Point both index fingers toward each other',
+      npcResponse: "Got it — I'll check the area right away.",
+    },
+    {
+      npcText: "Do they have a fever?",
+      npcMood: 'curious',
+      requiredSignId: 'FEVER',
+      hint: 'Sweep your open hand across your forehead',
+      npcResponse: "Temperature is elevated. I'll get medication.",
+    },
+    {
+      npcText: "The patient is thirsty. What do they need?",
+      npcMood: 'neutral',
+      requiredSignId: 'WATER',
+      hint: 'Three fingers (W shape) at your chin',
+      npcResponse: "Water — good call. Hydration is key for recovery.",
+    },
+    {
+      npcText: "Time to give them their medication.",
+      npcMood: 'neutral',
+      requiredSignId: 'MEDICINE',
+      hint: 'Open hand twists over your flat palm',
+      npcResponse: "Medicine given. The patient looks more comfortable.",
+    },
+    {
+      npcText: "They feel dizzy now — is that right?",
+      npcMood: 'curious',
+      requiredSignId: 'DIZZY',
+      hint: 'Circle your open hand near your face',
+      npcResponse: "Noted — that can be a side effect. We're monitoring.",
+    },
+    {
+      npcText: "This is serious. Where do we need to go?",
+      npcMood: 'surprised',
+      requiredSignId: 'HOSPITAL',
+      hint: 'Two fingers (H) by your shoulder, draw a cross',
+      npcResponse: "The hospital! I'll call an ambulance now. 🚑",
+    },
+    {
+      npcText: "It's urgent — sign the emergency!",
+      npcMood: 'surprised',
+      requiredSignId: 'EMERGENCY',
+      hint: 'Make a claw and shake it fast!',
+      npcResponse: "Amazing work — you helped save a life today! 💙",
+    },
+  ],
+};
+
+export const STORIES: StoryScript[] = [COFFEE_SHOP_STORY, HOSPITAL_STORY];

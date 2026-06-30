@@ -100,6 +100,12 @@ const PATTERNS: Record<string, Record<string, number>> = {
   v: { index: 1, middle: 1, ring: 0, pinky: 0 },
   l: { thumb: 1, index: 1, middle: 0, ring: 0, pinky: 0 },
   y: { thumb: 1, index: 0, middle: 0, ring: 0, pinky: 1 },
+  // strict min-based: averaged version let open hands score 0.5+
+  n: { index: 1, middle: 1, ring: 0, pinky: 0 },
+  h: { index: 1, middle: 1, ring: 0, pinky: 0 },
+  u: { index: 1, middle: 1, ring: 0, pinky: 0 },
+  w: { index: 1, middle: 1, ring: 1, pinky: 0 },
+  middle: { index: 0, middle: 1, ring: 0, pinky: 0 },
 };
 
 function matchPattern(hand: Hand, pattern: Record<string, number>): number {
@@ -119,11 +125,6 @@ const DISPATCH: Record<string, (hand: Hand) => number> = {
   b: openConfidence,
   '5': openConfidence,
   claw: clawConfidence,
-  n: nConfidence,
-  h: nConfidence,
-  u: nConfidence,
-  w: wConfidence,
-  middle: middleConfidence,
 };
 
 export function handshapeConfidence(hand: Hand, kind: string): number {

@@ -1,34 +1,48 @@
 @import "tailwindcss";
 
 @theme {
-  /* Zippy's palette — midnight purple core */
-  --color-z-purple: #7B2FBE;
-  --color-z-purple-dark: #5A1F8E;
-  --color-z-purple-deep: #2D1150;
-  --color-z-purple-light: #A855F7;
-  --color-z-purple-glow: #C084FC;
-  --color-z-orange: #F59E0B;
-  --color-z-orange-bright: #FBBF24;
-  --color-z-cream: #FFF8E7;
-  --color-z-yellow: #FCD34D;
+  /* ── Zippy character palette ── */
+
+  /* Purple — brand / primary (body colour) */
+  --color-z-purple: #7C3AED;
+  --color-z-purple-dark: #5B21B6;
+  --color-z-purple-deep: #2D1464;
+  --color-z-purple-light: #A78BFA;
+  --color-z-purple-glow: #C4B5FD;
+
+  /* Orange — nose / streak / energy */
+  --color-z-orange: #F97316;
+  --color-z-orange-dark: #EA580C;
+  --color-z-orange-bright: #FDBA74;
+
+  /* Feroze / Teal — hair / XP / knowledge */
+  --color-z-teal: #14B8A6;
+  --color-z-teal-dark: #0F766E;
+  --color-z-teal-light: #5EEAD4;
+
+  /* z-yellow repurposed → teal-light so all XP text glows teal */
+  --color-z-yellow: #5EEAD4;
+
+  /* Status */
   --color-z-green: #34D399;
   --color-z-green-dark: #059669;
   --color-z-red: #EF4444;
   --color-z-blue: #60A5FA;
+  --color-z-cream: #FFF8E7;
 
-  /* Neutrals */
-  --color-z-gray-50: #FAF5FF;
-  --color-z-gray-100: #F3E8FF;
-  --color-z-gray-200: #DDD6E1;
+  /* Neutrals (subtle purple tint) */
+  --color-z-gray-50: #F5F3FF;
+  --color-z-gray-100: #EDE9FE;
+  --color-z-gray-200: #D4CCEF;
   --color-z-gray-300: #A89BB5;
   --color-z-gray-400: #7C6F8A;
-  --color-z-gray-500: #4A3D57;
+  --color-z-gray-500: #4C3D6B;
 
-  /* Surfaces */
-  --color-z-bg: #120B1E;
-  --color-z-card: #1E1230;
-  --color-z-surface: #2A1B40;
-  --color-z-surface-hover: #362450;
+  /* Surfaces — deeper purple-black to make the vivid purple pop */
+  --color-z-bg: #0D0A1E;
+  --color-z-card: #18103A;
+  --color-z-surface: #221548;
+  --color-z-surface-hover: #2D1B5C;
 
   --font-sans: 'Quicksand', sans-serif;
 }
@@ -43,8 +57,8 @@
 
 body {
   margin: 0;
-  background-color: #120B1E;
-  color: #FAF5FF;
+  background-color: #0D0A1E;
+  color: #F5F3FF;
   font-family: 'Quicksand', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -61,6 +75,6 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2A1B40;
+  background: #221548;
   border-radius: 3px;
 }
