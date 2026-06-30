@@ -1,9 +1,14 @@
 import { useUserStore } from '@/stores/useUserStore';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const MILESTONES = [7, 30, 100];
 
 export function StreakCard() {
-  const { streak, dailyGoalMinutes, dailyProgressMinutes } = useUserStore();
+  const { streak, dailyGoalMinutes, dailyProgressMinutes, streakFreezes, streakMilestonesAwarded } = useUserStore();
   const progress = Math.min(1, dailyProgressMinutes / dailyGoalMinutes);
+
+  const nextMilestone = MILESTONES.find(m => streak < m) ?? null;
+  const latestMilestone = [...MILESTONES].reverse().find(m => streakMilestonesAwarded.includes(m)) ?? null;
 
   return (
     <motion.div
@@ -15,7 +20,7 @@ export function StreakCard() {
       whileHover="blaze"
       variants={{ blaze: { scale: 1.018, transition: { duration: 0.25, ease: 'easeOut' } } }}
     >
-      {/* Orange glow orb — pulses on hover */}
+      {/* Orange glow orb */}
       <motion.div
         className="absolute top-0 right-0 w-44 h-44 rounded-full blur-3xl pointer-events-none"
         style={{ background: 'radial-gradient(circle, rgba(249,115,22,0.35) 0%, transparent 70%)' }}
@@ -27,15 +32,12 @@ export function StreakCard() {
           },
         }}
       />
-
-      {/* Secondary purple glow */}
       <div className="absolute -bottom-4 -left-4 w-28 h-28 bg-z-purple-light/10 rounded-full blur-2xl pointer-events-none" />
 
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              {/* Fire — blazes when card is hovered */}
               <motion.span
                 className="text-3xl inline-block"
                 variants={{
@@ -60,13 +62,18 @@ export function StreakCard() {
               <span className="text-2xl font-bold text-white">
                 {streak} day{streak !== 1 ? 's' : ''}
               </span>
+              {/* Latest milestone badge */}
+              {latestMilestone && (
+                <span className="text-[11px] font-bold text-z-yellow bg-z-yellow/15 px-2 py-0.5 rounded-full">
+                  🏅 {latestMilestone}-day
+                </span>
+              )}
             </div>
             <p className="text-sm text-z-purple-glow/80">
               {streak === 0 ? 'Start signing today!' : 'Keep the momentum!'}
             </p>
           </div>
 
-          {/* Hand shakes on hover */}
           <motion.div
             className="text-4xl opacity-80"
             variants={{
@@ -80,6 +87,7 @@ export function StreakCard() {
           </motion.div>
         </div>
 
+        {/* Progress bar */}
         <div>
           <div className="flex justify-between text-sm mb-2">
             <span className="text-white/70">Today&apos;s goal</span>
@@ -96,6 +104,27 @@ export function StreakCard() {
               transition={{ duration: 0.9, ease: [0.25, 0.46, 0.45, 0.94], delay: 0.3 }}
             />
           </div>
+        </div>
+
+        {/* Footer: freeze count + next milestone */}
+        <div className="flex items-center justify-between mt-3">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm">🧊</span>
+            <span className="text-xs text-white/60">
+              {streakFreezes} freeze{streakFreezes !== 1 ? 's' : ''} left
+            </span>
+          </div>
+          <AnimatePresence>
+            {nextMilestone && streak > 0 && (
+              <motion.span
+                className="text-xs text-white/50"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+              >
+                {nextMilestone - streak} day{nextMilestone - streak !== 1 ? 's' : ''} to 🏅{nextMilestone}
+              </motion.span>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </motion.div>

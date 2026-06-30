@@ -1,0 +1,372 @@
+import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useCamera } from '@/hooks/useCamera';
+import { useRecognition } from '@/hooks/useRecognition';
+import { useSounds } from '@/hooks/useSounds';
+import { useUserStore } from '@/stores/useUserStore';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { SIGNS as ENGINE_SIGNS } from '@/engine/signs/index';
+import { SIGNS } from '@/data/signs';
+import type { VerifyResult } from '@/engine/verifier';
+
+type Phase = 'lobby' | 'waiting' | 'signer' | 'guesser' | 'result' | 'done';
+
+interface MatchState {
+  channel: ReturnType<typeof supabase.channel> | null;
+  roomId: string;
+  opponentId: string;
+  opponentUsername: string;
+  currentSign: string;
+  round: number;
+  myScore: number;
+  opponentScore: number;
+}
+
+interface Props {
+  onExit: () => void;
+}
+
+const ALL_SIGNS = Object.keys(SIGNS);
+const ROUNDS = 5;
+
+function pickSigns(n: number): string[] {
+  const shuffled = [...ALL_SIGNS].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
+export function MultiplayerPage({ onExit }: Props) {
+  const { user } = useAuth();
+  const { addSigns, addGold } = useUserStore();
+  const sounds = useSounds();
+  const { videoRef, status: camStatus, start: startCam, stop: stopCam } = useCamera();
+  const recognition = useRecognition({ onPass: handleSignCorrect });
+
+  const [phase, setPhase] = useState<Phase>('lobby');
+  const [joinCode, setJoinCode] = useState('');
+  const [matchState, setMatchState] = useState<MatchState | null>(null);
+  const [roundSignIds, setRoundSignIds] = useState<string[]>([]);
+  const [guessOptions, setGuessOptions] = useState<string[]>([]);
+  const [guessResult, setGuessResult] = useState<'correct' | 'wrong' | null>(null);
+  const [opponentSigned, setOpponentSigned] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
+  const loopRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    recognition.init();
+  }, [recognition.init]);
+
+  function handleSignCorrect(_r: VerifyResult) {
+    if (phase !== 'signer' || !matchState) return;
+    sounds.correct();
+    const ch = matchState.channel;
+    if (ch) ch.send({ type: 'broadcast', event: 'signed', payload: { signId: matchState.currentSign } });
+    advanceRound(true, false);
+  }
+
+  function advanceRound(iSigned: boolean, opponentSigned: boolean) {
+    if (!matchState) return;
+    const nextRound = matchState.round + 1;
+    const myNewScore = matchState.myScore + (iSigned ? 1 : 0);
+    const opNewScore = matchState.opponentScore + (opponentSigned ? 1 : 0);
+
+    if (nextRound > ROUNDS) {
+      setMatchState((s) => s ? { ...s, myScore: myNewScore, opponentScore: opNewScore } : s);
+      setPhase('done');
+      if (myNewScore > opNewScore) {
+        addSigns(200);
+        addGold(10);
+        sounds.levelUp();
+      }
+      return;
+    }
+
+    const nextSign = roundSignIds[nextRound - 1] ?? ALL_SIGNS[0];
+    setMatchState((s) => s ? { ...s, round: nextRound, myScore: myNewScore, opponentScore: opNewScore, currentSign: nextSign } : s);
+    setOpponentSigned(false);
+    setGuessResult(null);
+
+    // Alternate roles each round
+    const amSigner = nextRound % 2 === (user?.id ?? '' < (matchState.opponentId) ? 1 : 0);
+    setPhase(amSigner ? 'signer' : 'guesser');
+    if (!amSigner) buildGuessOptions(nextSign);
+  }
+
+  function buildGuessOptions(signId: string) {
+    const distractors = ALL_SIGNS.filter((s) => s !== signId).sort(() => Math.random() - 0.5).slice(0, 3);
+    const opts = [signId, ...distractors].sort(() => Math.random() - 0.5);
+    setGuessOptions(opts);
+  }
+
+  const createRoom = async () => {
+    if (!user) return;
+    const roomId = Math.random().toString(36).slice(2, 8).toUpperCase();
+    const signs = pickSigns(ROUNDS);
+    setRoundSignIds(signs);
+    setStatusMsg(`Room code: ${roomId} — Share with a friend!`);
+    setPhase('waiting');
+
+    const ch = supabase.channel(`mp-room-${roomId}`);
+    ch.on('broadcast', { event: 'join' }, ({ payload }) => {
+      const opId = payload.userId as string;
+      const opName = payload.username as string;
+      const firstSign = signs[0];
+      const amSigner = user.id < opId;
+      setMatchState({
+        channel: ch,
+        roomId,
+        opponentId: opId,
+        opponentUsername: opName,
+        currentSign: firstSign,
+        round: 1,
+        myScore: 0,
+        opponentScore: 0,
+      });
+      if (amSigner) { setPhase('signer'); startCam(); }
+      else { setPhase('guesser'); buildGuessOptions(firstSign); }
+      ch.send({ type: 'broadcast', event: 'start', payload: { signs, firstSign, hostId: user.id } });
+    });
+    ch.on('broadcast', { event: 'signed' }, () => {
+      setOpponentSigned(true);
+      advanceRound(false, true);
+    });
+    ch.on('broadcast', { event: 'guess' }, ({ payload }) => {
+      const correct = payload.signId === matchState?.currentSign;
+      advanceRound(correct, false);
+    });
+    ch.subscribe();
+  };
+
+  const joinRoom = async () => {
+    if (!user || !joinCode.trim()) return;
+    const roomId = joinCode.trim().toUpperCase();
+    setPhase('waiting');
+    setStatusMsg('Joining room…');
+
+    const ch = supabase.channel(`mp-room-${roomId}`);
+    ch.on('broadcast', { event: 'start' }, ({ payload }) => {
+      const hostId = payload.hostId as string;
+      const signs = payload.signs as string[];
+      const firstSign = payload.firstSign as string;
+      setRoundSignIds(signs);
+      const amSigner = (user.id ?? '') > hostId;
+      setMatchState({
+        channel: ch,
+        roomId,
+        opponentId: hostId,
+        opponentUsername: 'Host',
+        currentSign: firstSign,
+        round: 1,
+        myScore: 0,
+        opponentScore: 0,
+      });
+      if (amSigner) { setPhase('signer'); startCam(); }
+      else { setPhase('guesser'); buildGuessOptions(firstSign); }
+    });
+    ch.on('broadcast', { event: 'signed' }, () => {
+      setOpponentSigned(true);
+      advanceRound(false, true);
+    });
+    ch.on('broadcast', { event: 'guess' }, ({ payload }) => {
+      const correct = payload.signId === matchState?.currentSign;
+      advanceRound(correct, false);
+    });
+    ch.subscribe(async () => {
+      await ch.send({ type: 'broadcast', event: 'join', payload: { userId: user.id, username: user.email?.split('@')[0] ?? 'Player' } });
+      setStatusMsg('Connected! Waiting for host…');
+    });
+  };
+
+  const handleGuess = (signId: string) => {
+    if (!matchState || guessResult) return;
+    const correct = signId === matchState.currentSign;
+    setGuessResult(correct ? 'correct' : 'wrong');
+    if (correct) sounds.correct(); else sounds.wrong();
+    matchState.channel?.send({ type: 'broadcast', event: 'guess', payload: { signId } });
+    setTimeout(() => advanceRound(correct, opponentSigned), 1500);
+  };
+
+  useEffect(() => {
+    if (phase !== 'signer') { if (loopRef.current) { recognition.stopLoop(); loopRef.current = null; } return; }
+    if (camStatus === 'active' && matchState?.currentSign && videoRef.current) {
+      const engineSign = ENGINE_SIGNS[matchState.currentSign];
+      if (engineSign && loopRef.current !== engineSign.name) {
+        recognition.stopLoop();
+        recognition.startLoop(videoRef.current, engineSign);
+        loopRef.current = engineSign.name;
+      }
+    }
+  });
+
+  useEffect(() => () => { stopCam(); recognition.stopLoop(); }, []);
+
+  return (
+    <div className="min-h-screen bg-z-bg flex flex-col">
+      <video ref={videoRef} style={{ width: 0, height: 0, opacity: 0, position: 'fixed', pointerEvents: 'none' }} muted playsInline autoPlay />
+
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-z-purple-deep/40">
+        <button onClick={() => { stopCam(); recognition.stopLoop(); onExit(); }}
+          className="w-8 h-8 flex items-center justify-center text-z-gray-400 hover:text-white">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+        <h1 className="font-bold text-lg">1v1 Multiplayer</h1>
+      </div>
+
+      <div className="flex-1 max-w-lg mx-auto w-full px-4 pb-6 flex flex-col">
+        <AnimatePresence mode="wait">
+
+          {phase === 'lobby' && (
+            <motion.div key="lobby" className="flex-1 flex flex-col items-center justify-center gap-6"
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="text-6xl">🤟</div>
+              <div className="text-center">
+                <h2 className="text-2xl font-bold">Sign & Guess</h2>
+                <p className="text-z-gray-300 text-sm mt-1">Sign it, your friend guesses it.</p>
+              </div>
+              <motion.button onClick={createRoom}
+                className="w-full max-w-xs py-3 rounded-2xl font-bold text-white"
+                style={{ background: 'linear-gradient(135deg,#7C3AED,#A78BFA)' }}
+                whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                Create Room
+              </motion.button>
+              <div className="w-full max-w-xs">
+                <p className="text-center text-z-gray-400 text-sm mb-2">— or join with a code —</p>
+                <div className="flex gap-2">
+                  <input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    placeholder="XXXXXX"
+                    className="flex-1 bg-z-card border border-white/10 rounded-2xl px-4 py-2.5 text-sm uppercase tracking-widest font-bold text-center focus:outline-none focus:border-z-purple/60" />
+                  <motion.button onClick={joinRoom} disabled={!joinCode.trim()}
+                    className="px-4 py-2.5 bg-z-purple rounded-2xl text-sm font-bold text-white disabled:opacity-40"
+                    whileTap={{ scale: 0.96 }}>
+                    Join
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {phase === 'waiting' && (
+            <motion.div key="waiting" className="flex-1 flex flex-col items-center justify-center gap-5"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <motion.div className="text-5xl" animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}>⚙️</motion.div>
+              <p className="font-bold text-lg text-center">{statusMsg || 'Waiting…'}</p>
+              {matchState?.roomId && (
+                <div className="bg-z-card border border-white/10 rounded-2xl px-8 py-4 text-center">
+                  <p className="text-xs text-z-gray-400 mb-1">Room Code</p>
+                  <p className="text-3xl font-bold tracking-widest text-z-purple-light">{matchState.roomId}</p>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {phase === 'signer' && matchState && (
+            <motion.div key="signer" className="flex-1 flex flex-col gap-4 pt-4"
+              initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-z-gray-400 uppercase tracking-widest">Round {matchState.round}/{ROUNDS}</span>
+                <span className="text-sm font-bold">You {matchState.myScore} · {matchState.opponentScore} {matchState.opponentUsername}</span>
+              </div>
+              <div className="bg-z-card border border-z-purple/30 rounded-2xl p-4 text-center">
+                <p className="text-xs text-z-gray-400 mb-1">SIGN THIS</p>
+                <p className="text-3xl font-bold text-z-purple-light">{SIGNS[matchState.currentSign]?.name.replace(/_/g, ' ') ?? matchState.currentSign}</p>
+              </div>
+              <WebcamMirror videoRef={videoRef} />
+              <p className="text-center text-z-gray-400 text-sm">Sign it — your friend guesses!</p>
+            </motion.div>
+          )}
+
+          {phase === 'guesser' && matchState && (
+            <motion.div key="guesser" className="flex-1 flex flex-col gap-5 pt-4"
+              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-z-gray-400 uppercase tracking-widest">Round {matchState.round}/{ROUNDS}</span>
+                <span className="text-sm font-bold">You {matchState.myScore} · {matchState.opponentScore} {matchState.opponentUsername}</span>
+              </div>
+              <div className="bg-z-card border border-white/8 rounded-2xl p-4 text-center">
+                <p className="text-z-gray-400 text-sm">{matchState.opponentUsername} is signing…</p>
+                <motion.p className="text-3xl mt-2" animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.2, repeat: Infinity }}>🤟</motion.p>
+              </div>
+              <p className="text-center font-bold">What are they signing?</p>
+              <div className="grid grid-cols-2 gap-3">
+                {guessOptions.map((s) => (
+                  <motion.button key={s} onClick={() => handleGuess(s)}
+                    disabled={!!guessResult}
+                    className={`py-4 rounded-2xl font-bold text-sm border transition-colors ${
+                      guessResult
+                        ? s === matchState.currentSign
+                          ? 'bg-z-green/20 border-z-green text-z-green'
+                          : guessResult === 'wrong' && s !== matchState.currentSign
+                            ? 'border-white/8 text-z-gray-400'
+                            : 'border-white/8 text-z-gray-400'
+                        : 'bg-z-card border-white/10 hover:border-z-purple/40 text-white'
+                    }`}
+                    whileTap={{ scale: 0.97 }}>
+                    {SIGNS[s]?.name.replace(/_/g, ' ') ?? s}
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {phase === 'done' && matchState && (
+            <motion.div key="done" className="flex-1 flex flex-col items-center justify-center gap-5"
+              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
+              <div className="text-5xl">{matchState.myScore > matchState.opponentScore ? '🏆' : matchState.myScore === matchState.opponentScore ? '🤝' : '😅'}</div>
+              <h2 className="text-2xl font-bold">
+                {matchState.myScore > matchState.opponentScore ? 'You Won!' : matchState.myScore === matchState.opponentScore ? 'Draw!' : 'You Lost'}
+              </h2>
+              <div className="bg-z-card border border-white/8 rounded-2xl p-5 w-full max-w-xs">
+                <div className="flex justify-between items-center">
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-z-purple-light">{matchState.myScore}</p>
+                    <p className="text-xs text-z-gray-400 mt-0.5">You</p>
+                  </div>
+                  <span className="text-z-gray-500 font-bold">vs</span>
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-z-gray-200">{matchState.opponentScore}</p>
+                    <p className="text-xs text-z-gray-400 mt-0.5">{matchState.opponentUsername}</p>
+                  </div>
+                </div>
+              </div>
+              {matchState.myScore > matchState.opponentScore && (
+                <p className="text-z-yellow font-bold">+200 🤟 Signs · +10 🪙 Gold</p>
+              )}
+              <motion.button onClick={onExit}
+                className="px-8 py-3 rounded-2xl font-bold text-white"
+                style={{ background: 'linear-gradient(135deg,#7C3AED,#A78BFA)' }}
+                whileTap={{ scale: 0.97 }}>
+                Back to Home
+              </motion.button>
+            </motion.div>
+          )}
+
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+function WebcamMirror({ videoRef }: { videoRef: React.RefObject<HTMLVideoElement | null> }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef(0);
+  useEffect(() => {
+    const draw = () => {
+      const v = videoRef.current, c = canvasRef.current;
+      if (v && c && v.readyState >= 2) {
+        const ctx = c.getContext('2d');
+        if (ctx) { c.width = v.videoWidth; c.height = v.videoHeight; ctx.save(); ctx.scale(-1, 1); ctx.drawImage(v, -c.width, 0, c.width, c.height); ctx.restore(); }
+      }
+      rafRef.current = requestAnimationFrame(draw);
+    };
+    rafRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [videoRef]);
+  return (
+    <div className="relative rounded-2xl overflow-hidden bg-z-surface aspect-video">
+      <canvas ref={canvasRef} className="w-full h-full object-cover" />
+    </div>
+  );
+}

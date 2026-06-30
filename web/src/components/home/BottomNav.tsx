@@ -1,6 +1,6 @@
-import { motion, type Variant } from 'framer-motion';
+import { motion, type TargetAndTransition } from 'framer-motion';
 
-type Tab = 'learn' | 'review' | 'profile';
+export type Tab = 'learn' | 'review' | 'alphabet' | 'profile';
 
 interface Props {
   active: Tab;
@@ -8,16 +8,17 @@ interface Props {
 }
 
 const tabs: { id: Tab; label: string; icon: string }[] = [
-  { id: 'learn', label: 'Journey', icon: '🗺️' },
-  { id: 'review', label: 'Review', icon: '🪞' },
-  { id: 'profile', label: 'Me', icon: '🤟' },
+  { id: 'learn',    label: 'Journey',  icon: '🗺️' },
+  { id: 'review',   label: 'Review',   icon: '🪞'  },
+  { id: 'alphabet', label: 'ABCs',     icon: '🔤'  },
+  { id: 'profile',  label: 'Me',       icon: '🤟'  },
 ];
 
-// per-icon hover motion (smooth, loops gently while hovered)
-const ICON_HOVER: Record<Tab, Variant> = {
-  learn:   { rotate: [0, -9, 8, -6, 0],            transition: { duration: 1.0, repeat: Infinity, ease: 'easeInOut' } },
-  review:  { scale: [1, 1.16, 1, 1.12, 1],          transition: { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } },
-  profile: { rotate: [0, -18, 14, -18, 14, 0],      transition: { duration: 1.1, repeat: Infinity, ease: 'easeInOut' } },
+const ICON_HOVER: Record<Tab, TargetAndTransition> = {
+  learn:    { rotate: [0, -9, 8, -6, 0],           transition: { duration: 1.0, repeat: Infinity, ease: 'easeInOut' as const } },
+  review:   { scale: [1, 1.16, 1, 1.12, 1],         transition: { duration: 1.2, repeat: Infinity, ease: 'easeInOut' as const } },
+  alphabet: { rotate: [0, -6, 6, -4, 0], scale: [1, 1.1, 1], transition: { duration: 1.0, repeat: Infinity, ease: 'easeInOut' as const } },
+  profile:  { rotate: [0, -18, 14, -18, 14, 0],    transition: { duration: 1.1, repeat: Infinity, ease: 'easeInOut' as const } },
 };
 
 export function BottomNav({ active, onChange }: Props) {
@@ -30,7 +31,7 @@ export function BottomNav({ active, onChange }: Props) {
             <motion.button
               key={tab.id}
               onClick={() => onChange(tab.id)}
-              className={`relative flex flex-col items-center gap-1 px-5 py-1.5 rounded-2xl transition-colors ${
+              className={`relative flex flex-col items-center gap-1 px-4 py-1.5 rounded-2xl transition-colors ${
                 isActive ? 'bg-z-purple/20' : ''
               }`}
               initial="rest"
@@ -52,7 +53,7 @@ export function BottomNav({ active, onChange }: Props) {
               >
                 {tab.icon}
               </motion.span>
-              <span className={`text-[11px] font-semibold tracking-wide ${
+              <span className={`text-[10px] font-semibold tracking-wide ${
                 isActive ? 'text-z-purple-glow' : 'text-z-gray-400'
               }`}>
                 {tab.label}

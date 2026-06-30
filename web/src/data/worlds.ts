@@ -1,0 +1,43 @@
+export interface World {
+  id: string;
+  title: string;
+  emoji: string;
+  description: string;
+  color: string;
+  bgGradient: string;
+  unlockCondition: string | null;
+  unitIds: string[];
+  badgeId: string;
+  storyId: string | null;
+}
+
+export const WORLDS: World[] = [
+  {
+    id: 'coffee',
+    title: 'Coffee Shop',
+    emoji: '☕',
+    description: 'Greetings, orders, and small talk at the café',
+    color: '#A855F7',
+    bgGradient: 'linear-gradient(135deg, #4C1D95, #7C3AED)',
+    unlockCondition: null,
+    unitIds: ['unit-1', 'unit-2'],
+    badgeId: 'coffee_story',
+    storyId: 'coffee-story',
+  },
+  {
+    id: 'hospital',
+    title: 'Hospital',
+    emoji: '🏥',
+    description: 'Emergencies, symptoms, and care with the medical team',
+    color: '#EF4444',
+    bgGradient: 'linear-gradient(135deg, #7F1D1D, #DC2626)',
+    unlockCondition: 'coffee-story',
+    unitIds: ['unit-3', 'unit-4'],
+    badgeId: 'hospital_story',
+    storyId: 'hospital-story',
+  },
+];
+
+export function getWorld(id: string): World | undefined {
+  return WORLDS.find((w) => w.id === id);
+}

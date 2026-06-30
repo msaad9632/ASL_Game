@@ -1,6 +1,17 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { UserProgress } from '@/types/user';
+import type { UserProgress, SkillLevel, Quest, QuestType, SpeedTier, Chest } from '@/types/user';
+import { generateQuestsForToday } from '@/data/quests';
+import { ALL_BADGES, getBadge } from '@/data/badges';
+
+const STREAK_MILESTONES = [7, 30, 100];
+const MILESTONE_GOLD: Record<number, number> = { 7: 5, 30: 15, 100: 50 };
+
+const SKILL_UNLOCK_LESSONS: Record<SkillLevel, string[]> = {
+  beginner: [],
+  intermediate: ['greetings-1', 'cafe-order'],
+  advanced: ['greetings-1', 'cafe-order', 'fingerspelling-1', 'fingerspelling-2'],
+};
 
 function defaultProgress(): UserProgress {
   return {
@@ -14,6 +25,23 @@ function defaultProgress(): UserProgress {
     completedLessons: [],
     signAccuracy: {},
     achievements: [],
+    onboardingComplete: false,
+    skillLevel: 'beginner',
+    dailyQuests: [],
+    questsLastReset: '',
+    streakMilestonesAwarded: [],
+    signs: 0,
+    gold: 0,
+    badges: [],
+    activeBadge: null,
+    showcaseBadges: [],
+    speedHighScores: {},
+    totalCorrectSigns: 0,
+    pendingChests: [],
+    ownedCosmetics: [],
+    equippedBorder: null,
+    equippedAvatar: null,
+    friends: [],
   };
 }
 
@@ -23,12 +51,31 @@ function todayStr() {
 
 interface UserStore extends UserProgress {
   addXp: (amount: number) => void;
+  addSigns: (amount: number) => void;
+  addGold: (amount: number) => void;
   addDailyMinutes: (minutes: number) => void;
   completeLesson: (lessonId: string) => void;
   recordSign: (signId: string, correct: boolean) => void;
-  checkStreak: () => void;
+  checkStreak: () => number[];
   reset: () => void;
   mergeProgress: (remote: Partial<UserProgress>) => void;
+  completeOnboarding: (level: SkillLevel) => void;
+  refreshDailyQuests: () => void;
+  updateQuestProgress: (type: QuestType, delta?: number) => void;
+  claimQuest: (questId: string) => void;
+  recordPracticeSession: () => void;
+  checkBadges: () => string[];
+  awardBadge: (id: string) => void;
+  setActiveBadge: (id: string | null) => void;
+  toggleShowcaseBadge: (id: string) => void;
+  recordSpeedResult: (tier: SpeedTier, score: number, combo: number, signsEarned: number) => void;
+  purchaseCosmetic: (itemId: string, goldPrice: number) => boolean;
+  equipBorder: (itemId: string | null) => void;
+  equipAvatar: (itemId: string | null) => void;
+  openChest: (chestId: string) => { signs: number; gold: number };
+  skipChest: (chestId: string) => boolean;
+  addFriend: (userId: string) => void;
+  removeFriend: (userId: string) => void;
 }
 
 export const useUserStore = create<UserStore>()(
@@ -36,27 +83,42 @@ export const useUserStore = create<UserStore>()(
     (set, get) => ({
       ...defaultProgress(),
 
-      addXp: (amount: number) => {
+      addXp: (amount) => {
         set((s) => {
           const newXp = s.xp + amount;
-          const newLevel = Math.floor(newXp / 100) + 1;
-          return { xp: newXp, level: newLevel };
+          return { xp: newXp, level: Math.floor(newXp / 100) + 1 };
         });
+        get().checkBadges();
       },
 
-      addDailyMinutes: (minutes: number) => {
+      addSigns: (amount) => set((s) => ({ signs: s.signs + amount })),
+      addGold: (amount) => set((s) => ({ gold: s.gold + amount })),
+
+      addDailyMinutes: (minutes) => {
         set((s) => ({ dailyProgressMinutes: s.dailyProgressMinutes + minutes }));
       },
 
-      completeLesson: (lessonId: string) => {
+      completeLesson: (lessonId) => {
         set((s) => {
           if (s.completedLessons.includes(lessonId)) return s;
-          return { completedLessons: [...s.completedLessons, lessonId] };
+          const newCompleted = [...s.completedLessons, lessonId];
+          // Award a chest every 3rd completed lesson
+          const newChests = [...s.pendingChests];
+          if (newCompleted.length % 3 === 0) {
+            newChests.push({
+              id: `chest-${Date.now()}`,
+              worldId: 'coffee',
+              readyAt: Date.now() + 60 * 60 * 1000,
+            });
+          }
+          return { completedLessons: newCompleted, pendingChests: newChests };
         });
         get().checkStreak();
+        get().updateQuestProgress('complete_lesson', 1);
+        get().checkBadges();
       },
 
-      recordSign: (signId: string, correct: boolean) => {
+      recordSign: (signId, correct) => {
         set((s) => {
           const prev = s.signAccuracy[signId] ?? {
             attempts: 0,
@@ -89,11 +151,15 @@ export const useUserStore = create<UserStore>()(
                 easeFactor,
               },
             },
+            totalCorrectSigns: s.totalCorrectSigns + (correct ? 1 : 0),
           };
         });
+        if (correct) get().updateQuestProgress('sign_correct', 1);
+        get().checkBadges();
       },
 
       checkStreak: () => {
+        const newlyAwarded: number[] = [];
         set((s) => {
           const today = todayStr();
           if (s.lastPracticeDate === today) return s;
@@ -107,50 +173,252 @@ export const useUserStore = create<UserStore>()(
             newStreak += 1;
           } else if (s.lastPracticeDate !== today) {
             if (s.streakFreezes > 0 && s.lastPracticeDate) {
-              return {
-                lastPracticeDate: today,
-                streakFreezes: s.streakFreezes - 1,
-              };
+              return { lastPracticeDate: today, streakFreezes: s.streakFreezes - 1 };
             }
             newStreak = 1;
           }
-          return { streak: newStreak, lastPracticeDate: today };
+
+          let goldBonus = 0;
+          const newMilestones = [...s.streakMilestonesAwarded];
+          for (const m of STREAK_MILESTONES) {
+            if (newStreak >= m && !newMilestones.includes(m)) {
+              newMilestones.push(m);
+              goldBonus += MILESTONE_GOLD[m] ?? 0;
+              newlyAwarded.push(m);
+            }
+          }
+
+          return {
+            streak: newStreak,
+            lastPracticeDate: today,
+            streakMilestonesAwarded: newMilestones,
+            gold: s.gold + goldBonus,
+          };
         });
+        get().updateQuestProgress('streak_days');
+        get().checkBadges();
+        return newlyAwarded;
       },
 
       reset: () => set(defaultProgress()),
 
-      // Called after sign-in: take the best of local + remote.
-      mergeProgress: (remote: Partial<UserProgress>) => {
+      mergeProgress: (remote) => {
         set((local) => {
           const merged: Partial<UserProgress> = {};
-
           if ((remote.xp ?? 0) > local.xp) merged.xp = remote.xp;
           if ((remote.level ?? 1) > local.level) merged.level = remote.level;
           if ((remote.streak ?? 0) > local.streak) merged.streak = remote.streak;
-
           if (remote.completedLessons) {
-            const union = Array.from(new Set([...local.completedLessons, ...remote.completedLessons]));
-            merged.completedLessons = union;
+            merged.completedLessons = Array.from(
+              new Set([...local.completedLessons, ...remote.completedLessons])
+            );
           }
-
           if (remote.signAccuracy) {
-            const merged_acc = { ...local.signAccuracy };
+            const acc = { ...local.signAccuracy };
             for (const [id, rs] of Object.entries(remote.signAccuracy)) {
               const ls = local.signAccuracy[id];
-              if (!ls || rs.lastAttempt > ls.lastAttempt) merged_acc[id] = rs;
+              if (!ls || rs.lastAttempt > ls.lastAttempt) acc[id] = rs;
             }
-            merged.signAccuracy = merged_acc;
+            merged.signAccuracy = acc;
           }
-
           if (remote.lastPracticeDate) merged.lastPracticeDate = remote.lastPracticeDate;
-
           return merged;
         });
       },
+
+      completeOnboarding: (level) => {
+        const toUnlock = SKILL_UNLOCK_LESSONS[level];
+        set((s) => ({
+          onboardingComplete: true,
+          skillLevel: level,
+          completedLessons: Array.from(new Set([...s.completedLessons, ...toUnlock])),
+        }));
+      },
+
+      refreshDailyQuests: () => {
+        const today = todayStr();
+        const s = get();
+        if (s.questsLastReset === today && s.dailyQuests.length > 0) return;
+
+        const fresh = generateQuestsForToday().map((q) => {
+          if (q.type === 'streak_days') {
+            const prog = Math.min(s.streak, q.target);
+            return { ...q, progress: prog, completed: prog >= q.target };
+          }
+          return q;
+        });
+        set({ dailyQuests: fresh, questsLastReset: today });
+      },
+
+      updateQuestProgress: (type, delta = 1) => {
+        set((s) => {
+          const updated = s.dailyQuests.map((q: Quest) => {
+            if (q.type !== type || q.completed || q.claimed) return q;
+            const newProgress =
+              type === 'streak_days'
+                ? Math.min(s.streak, q.target)
+                : Math.min(q.progress + delta, q.target);
+            return { ...q, progress: newProgress, completed: newProgress >= q.target };
+          });
+          return { dailyQuests: updated };
+        });
+      },
+
+      claimQuest: (questId) => {
+        set((s) => {
+          const quest = s.dailyQuests.find((q: Quest) => q.id === questId);
+          if (!quest || !quest.completed || quest.claimed) return s;
+          const newXp = s.xp + quest.xpReward;
+          return {
+            dailyQuests: s.dailyQuests.map((q: Quest) =>
+              q.id === questId ? { ...q, claimed: true } : q
+            ),
+            xp: newXp,
+            level: Math.floor(newXp / 100) + 1,
+            signs: s.signs + quest.signsReward,
+          };
+        });
+      },
+
+      recordPracticeSession: () => {
+        get().updateQuestProgress('practice_session', 1);
+      },
+
+      checkBadges: () => {
+        const s = get();
+        const toAward: string[] = [];
+
+        const conditions: Record<string, boolean> = {
+          first_sign:     s.totalCorrectSigns >= 1,
+          streak_7:       s.streak >= 7,
+          streak_30:      s.streak >= 30,
+          streak_100:     s.streak >= 100,
+          lesson_5:       s.completedLessons.length >= 5,
+          lesson_all:     s.completedLessons.length >= 14,
+          coffee_story:   s.completedLessons.includes('coffee-story'),
+          hospital_story: s.completedLessons.includes('hospital-story'),
+          speed_warmup:   !!s.speedHighScores['warmup'],
+          speed_sprint:   !!s.speedHighScores['sprint'],
+          speed_blitz:    !!s.speedHighScores['blitz'],
+          combo_5:        Object.values(s.speedHighScores).some((hs) => hs.combo >= 5),
+          combo_10:       Object.values(s.speedHighScores).some((hs) => hs.combo >= 10),
+          signs_50:       s.totalCorrectSigns >= 50,
+          signs_200:      s.totalCorrectSigns >= 200,
+          signs_500:      s.totalCorrectSigns >= 500,
+          xp_100:         s.xp >= 100,
+          xp_500:         s.xp >= 500,
+          speed_score_50: Object.values(s.speedHighScores).some((hs) => hs.score >= 50),
+        };
+
+        for (const [id, met] of Object.entries(conditions)) {
+          if (met && !s.badges.includes(id)) {
+            toAward.push(id);
+          }
+        }
+
+        if (toAward.length > 0) {
+          let goldBonus = 0;
+          for (const id of toAward) {
+            const badge = getBadge(id);
+            if (badge) goldBonus += badge.goldReward;
+          }
+          set((st) => ({
+            badges: [...st.badges, ...toAward],
+            gold: st.gold + goldBonus,
+          }));
+        }
+
+        // Suppress unused import warning
+        void ALL_BADGES;
+
+        return toAward;
+      },
+
+      awardBadge: (id) => {
+        set((s) => {
+          if (s.badges.includes(id)) return s;
+          const badge = getBadge(id);
+          return {
+            badges: [...s.badges, id],
+            gold: s.gold + (badge?.goldReward ?? 0),
+          };
+        });
+      },
+
+      setActiveBadge: (id) => set({ activeBadge: id }),
+
+      toggleShowcaseBadge: (id) => {
+        set((s) => {
+          if (s.showcaseBadges.includes(id)) {
+            return { showcaseBadges: s.showcaseBadges.filter((b) => b !== id) };
+          }
+          if (s.showcaseBadges.length >= 3) return s;
+          return { showcaseBadges: [...s.showcaseBadges, id] };
+        });
+      },
+
+      recordSpeedResult: (tier, score, combo, signsEarned) => {
+        set((s) => {
+          const prev = s.speedHighScores[tier];
+          if (prev && prev.score >= score) return s;
+          return {
+            speedHighScores: {
+              ...s.speedHighScores,
+              [tier]: { score, combo, signsEarned },
+            },
+          };
+        });
+        get().checkBadges();
+      },
+
+      purchaseCosmetic: (itemId, goldPrice) => {
+        const s = get();
+        if (s.gold < goldPrice || s.ownedCosmetics.includes(itemId)) return false;
+        set((st) => ({ gold: st.gold - goldPrice, ownedCosmetics: [...st.ownedCosmetics, itemId] }));
+        return true;
+      },
+
+      equipBorder: (itemId) => set({ equippedBorder: itemId }),
+      equipAvatar: (itemId) => set({ equippedAvatar: itemId }),
+
+      openChest: (chestId) => {
+        const s = get();
+        const chest = s.pendingChests.find((c: Chest) => c.id === chestId);
+        if (!chest || chest.readyAt > Date.now()) return { signs: 0, gold: 0 };
+        const signsWon = Math.floor(Math.random() * 150) + 50;
+        const goldWon = Math.floor(Math.random() * 8) + 2;
+        set((st) => ({
+          pendingChests: st.pendingChests.filter((c: Chest) => c.id !== chestId),
+          signs: st.signs + signsWon,
+          gold: st.gold + goldWon,
+        }));
+        return { signs: signsWon, gold: goldWon };
+      },
+
+      skipChest: (chestId) => {
+        const s = get();
+        const chest = s.pendingChests.find((c: Chest) => c.id === chestId);
+        if (!chest) return false;
+        const hoursLeft = Math.ceil((chest.readyAt - Date.now()) / (1000 * 60 * 60));
+        const cost = Math.max(5, hoursLeft * 20);
+        if (s.gold < cost) return false;
+        set((st) => ({
+          gold: st.gold - cost,
+          pendingChests: st.pendingChests.map((c: Chest) =>
+            c.id === chestId ? { ...c, readyAt: 0 } : c
+          ),
+        }));
+        return true;
+      },
+
+      addFriend: (userId) => set((s) => ({
+        friends: s.friends.includes(userId) ? s.friends : [...s.friends, userId],
+      })),
+
+      removeFriend: (userId) => set((s) => ({
+        friends: s.friends.filter((id) => id !== userId),
+      })),
     }),
-    {
-      name: 'asl-game-progress',
-    }
+    { name: 'asl-game-progress' }
   )
 );
