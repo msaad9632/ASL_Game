@@ -1,0 +1,9 @@
+# ML pipeline deps (Phase C). The extractor (C.1) only needs the root requirements
+# (mediapipe + opencv + numpy); these are for the dataset/training side.
+#
+# On Kaggle, tensorflow + matplotlib are preinstalled — usually only tensorflowjs
+# needs `pip install tensorflowjs`.
+numpy>=1.26
+matplotlib>=3.8
+tensorflow>=2.15
+tensorflowjs>=4.17   # browser export for the disambiguation layer (C.5)
