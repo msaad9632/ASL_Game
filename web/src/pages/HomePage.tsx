@@ -39,7 +39,7 @@ export function HomePage({
 
   return (
     <div className="min-h-screen bg-z-bg">
-      <TopBar onOpenShop={onOpenShop} />
+      <TopBar onOpenShop={onOpenShop} onOpenProfile={() => setTab('profile')} />
 
       <div className="max-w-lg mx-auto px-4 pt-4">
         <AnimatePresence mode="wait">

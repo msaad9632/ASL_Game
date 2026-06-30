@@ -6,6 +6,7 @@ import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { BadgesSection } from '@/components/home/BadgesSection';
 import { getBadge } from '@/data/badges';
+import { SHOP_ITEMS, getShopItem } from '@/data/shop';
 import { supabaseReady } from '@/lib/supabase';
 
 const FIRE_REST  = { rotate: 0, x: 0, scale: 1, filter: 'brightness(1) drop-shadow(0 0 0px rgba(249,115,22,0))', transition: { duration: 0.3, ease: 'easeOut' as const } };
@@ -55,7 +56,8 @@ interface ProfileTabProps {
 }
 
 export function ProfileTab({ onOpenFriends, onStartMultiplayer }: ProfileTabProps = {}) {
-  const { xp, level, streak, signs, gold, lastPracticeDate, completedLessons, signAccuracy, badges, showcaseBadges, speedHighScores, activeBadge } = useUserStore();
+  const { xp, level, streak, signs, gold, lastPracticeDate, completedLessons, signAccuracy, badges, showcaseBadges, speedHighScores, activeBadge, equippedAvatar, equippedBorder, ownedCosmetics, equipAvatar } = useUserStore();
+  const borderClasses = equippedBorder ? (getShopItem(equippedBorder)?.preview ?? '') : '';
   const { user, username, signOut } = useAuth();
   const { rows, loading: lbLoading } = useLeaderboard();
   const [showAuth, setShowAuth] = useState(false);
@@ -77,7 +79,9 @@ export function ProfileTab({ onOpenFriends, onStartMultiplayer }: ProfileTabProp
           <div className="bg-z-card border border-white/5 rounded-2xl p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-z-purple to-z-purple-deep flex items-center justify-center text-lg">
-                {activeBadge ? (getBadge(activeBadge)?.icon ?? '🤟') : '🤟'}
+                {equippedAvatar
+                  ? (SHOP_ITEMS.find((i) => i.id === equippedAvatar)?.icon ?? '🤟')
+                  : activeBadge ? (getBadge(activeBadge)?.icon ?? '🤟') : '🤟'}
               </div>
               <div>
                 <p className="font-bold text-sm">{username ?? '…'}</p>
@@ -100,10 +104,12 @@ export function ProfileTab({ onOpenFriends, onStartMultiplayer }: ProfileTabProp
       {/* Avatar + showcase */}
       <motion.div className="text-center mb-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
         <motion.div
-          className="w-20 h-20 rounded-3xl bg-gradient-to-br from-z-purple to-z-purple-deep flex items-center justify-center text-4xl mx-auto mb-3 shadow-lg shadow-z-purple/30 cursor-default"
+          className={`w-20 h-20 rounded-3xl bg-gradient-to-br from-z-purple to-z-purple-deep flex items-center justify-center text-4xl mx-auto mb-3 cursor-default ${borderClasses || 'shadow-lg shadow-z-purple/30'}`}
           whileHover={{ rotate: [0, -12, 12, -8, 0], scale: 1.08, transition: { duration: 0.45 } }}
         >
-          {activeBadge ? (getBadge(activeBadge)?.icon ?? '🤟') : '🤟'}
+          {equippedAvatar
+            ? (SHOP_ITEMS.find((i) => i.id === equippedAvatar)?.icon ?? '🤟')
+            : activeBadge ? (getBadge(activeBadge)?.icon ?? '🤟') : '🤟'}
         </motion.div>
         {showcaseBadges.length > 0 && (
           <div className="flex justify-center gap-2 mb-2">
@@ -194,6 +200,42 @@ export function ProfileTab({ onOpenFriends, onStartMultiplayer }: ProfileTabProp
               </>
             )}
           </motion.div>
+
+          {/* Avatar selector */}
+          {(() => {
+            const ownedAvatars = SHOP_ITEMS.filter((i) => i.type === 'avatar' && ownedCosmetics.includes(i.id));
+            if (ownedAvatars.length === 0) return null;
+            return (
+              <motion.div className="bg-z-card border border-white/5 rounded-2xl p-4 mb-5" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }}>
+                <h3 className="font-bold text-sm mb-3 text-z-gray-300">My Avatars</h3>
+                <div className="flex flex-wrap gap-2">
+                  {ownedAvatars.map((item) => {
+                    const isEquipped = equippedAvatar === item.id;
+                    return (
+                      <motion.button
+                        key={item.id}
+                        onClick={() => equipAvatar(isEquipped ? null : item.id)}
+                        className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center gap-0.5 border-2 transition-colors ${
+                          isEquipped
+                            ? 'border-z-purple bg-z-purple/20 shadow-md shadow-z-purple/30'
+                            : 'border-white/10 bg-z-surface/40 hover:border-z-purple/50'
+                        }`}
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.92 }}
+                        title={item.title}
+                      >
+                        <span className="text-2xl">{item.icon}</span>
+                        {isEquipped && <span className="text-[8px] font-bold text-z-purple-light leading-none">ON</span>}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+                {equippedAvatar && (
+                  <p className="text-[11px] text-z-gray-400 mt-2">Tap your equipped avatar to unequip</p>
+                )}
+              </motion.div>
+            );
+          })()}
 
           {/* Weekly calendar */}
           <motion.div className="bg-z-card border border-white/5 rounded-2xl p-5 mb-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
