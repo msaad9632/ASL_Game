@@ -23,6 +23,7 @@ function todayStr() {
 
 interface UserStore extends UserProgress {
   addXp: (amount: number) => void;
+  addDailyMinutes: (minutes: number) => void;
   completeLesson: (lessonId: string) => void;
   recordSign: (signId: string, correct: boolean) => void;
   checkStreak: () => void;
@@ -41,6 +42,10 @@ export const useUserStore = create<UserStore>()(
           const newLevel = Math.floor(newXp / 100) + 1;
           return { xp: newXp, level: newLevel };
         });
+      },
+
+      addDailyMinutes: (minutes: number) => {
+        set((s) => ({ dailyProgressMinutes: s.dailyProgressMinutes + minutes }));
       },
 
       completeLesson: (lessonId: string) => {

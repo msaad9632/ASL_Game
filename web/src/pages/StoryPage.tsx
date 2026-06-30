@@ -6,6 +6,8 @@ import { useSounds } from '@/hooks/useSounds';
 import { useConfetti } from '@/hooks/useConfetti';
 import { ParameterChecklist } from '@/components/lesson/ParameterChecklist';
 import { useUserStore } from '@/stores/useUserStore';
+import { useAuth } from '@/contexts/AuthContext';
+import { logSignAttempt } from '@/hooks/useProgressSync';
 import { SIGNS as ENGINE_SIGNS } from '@/engine/signs/index';
 import { SIGNS } from '@/data/signs';
 import type { StoryScript } from '@/data/stories';
@@ -19,7 +21,8 @@ interface Props {
 }
 
 export function StoryPage({ story, onExit }: Props) {
-  const { addXp, recordSign, completeLesson } = useUserStore();
+  const { addXp, addDailyMinutes, recordSign, completeLesson } = useUserStore();
+  const { user } = useAuth();
   const { videoRef, status: camStatus, start: startCam, stop: stopCam } = useCamera();
   const sounds = useSounds();
   const { burst, bigCelebration } = useConfetti();
@@ -41,8 +44,10 @@ export function StoryPage({ story, onExit }: Props) {
       burst();
       if (currentLine) {
         recordSign(currentLine.requiredSignId, true);
+        addDailyMinutes(2);
         addXp(10);
         setEarnedXp((p) => p + 10);
+        if (user) logSignAttempt(user.id, currentLine.requiredSignId, true);
       }
 
       timerRef.current = setTimeout(() => {

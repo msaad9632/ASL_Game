@@ -7,7 +7,7 @@ import { AuthModal } from '@/components/auth/AuthModal';
 import { supabaseReady } from '@/lib/supabase';
 
 export function ProfileTab() {
-  const { xp, level, streak, completedLessons, signAccuracy } = useUserStore();
+  const { xp, level, streak, lastPracticeDate, completedLessons, signAccuracy } = useUserStore();
   const { user, username, signOut } = useAuth();
   const { rows, loading: lbLoading } = useLeaderboard();
   const [showAuth, setShowAuth] = useState(false);
@@ -110,21 +110,42 @@ export function ProfileTab() {
         <h3 className="font-bold text-base mb-3 tracking-wide">This Week</h3>
         <div className="flex justify-between">
           {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => {
-            const dayOfWeek = new Date().getDay();
-            const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-            const isToday = i === adjustedDay;
-            const isPast = i < adjustedDay;
+            const today = new Date();
+            const todayIdx = today.getDay() === 0 ? 6 : today.getDay() - 1; // 0=Mon
+            const isToday = i === todayIdx;
+            const isFuture = i > todayIdx;
+
+            // Work out if this weekday was a practice day based on streak.
+            // lastPracticeDate tells us the most recent day; streak tells us
+            // how many consecutive days back were active.
+            let practiced = false;
+            if (lastPracticeDate && streak > 0) {
+              const last = new Date(lastPracticeDate);
+              const lastIdx = last.getDay() === 0 ? 6 : last.getDay() - 1;
+              // How many days ago was the last practice day, within this week?
+              const daysAgo = todayIdx - i + (lastIdx < todayIdx ? todayIdx - lastIdx : 0);
+              practiced = daysAgo >= 0 && daysAgo < streak && i <= lastIdx;
+            }
+
             return (
               <div key={i} className="flex flex-col items-center gap-1.5">
                 <span className="text-[10px] text-z-gray-400 font-semibold">{day}</span>
                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold ${
-                  isToday
+                  isToday && lastPracticeDate === today.toISOString().slice(0, 10)
                     ? 'bg-z-purple text-white shadow-md shadow-z-purple/40'
-                    : isPast
-                      ? 'bg-z-surface text-z-gray-300'
-                      : 'bg-transparent text-z-gray-500 border border-z-gray-500/20'
+                    : isToday
+                      ? 'bg-z-purple/30 text-z-purple-light border border-z-purple/40'
+                      : practiced
+                        ? 'bg-z-green/20 text-z-green'
+                        : isFuture
+                          ? 'bg-transparent text-z-gray-500 border border-z-gray-500/20'
+                          : 'bg-z-surface/40 text-z-gray-500'
                 }`}>
-                  {isPast ? '✓' : isToday ? '●' : ''}
+                  {practiced || (isToday && lastPracticeDate === today.toISOString().slice(0, 10))
+                    ? '✓'
+                    : isToday
+                      ? '●'
+                      : ''}
                 </div>
               </div>
             );

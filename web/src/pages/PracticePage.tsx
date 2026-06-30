@@ -7,6 +7,8 @@ import { useConfetti } from '@/hooks/useConfetti';
 import { ParameterChecklist } from '@/components/lesson/ParameterChecklist';
 import { ReferenceClip } from '@/components/lesson/ReferenceClip';
 import { useUserStore } from '@/stores/useUserStore';
+import { useAuth } from '@/contexts/AuthContext';
+import { logSignAttempt } from '@/hooks/useProgressSync';
 import { SIGNS } from '@/data/signs';
 import { SIGNS as ENGINE_SIGNS } from '@/engine/signs/index';
 import { getSignsDueForReview, pickReceptiveDistractors } from '@/data/spaced-repetition';
@@ -21,6 +23,7 @@ interface Props {
 
 export function PracticePage({ onExit }: Props) {
   const { signAccuracy, recordSign, addXp } = useUserStore();
+  const { user } = useAuth();
   const { videoRef, status: camStatus, start: startCam, stop: stopCam } = useCamera();
   const sounds = useSounds();
   const { burst } = useConfetti();
@@ -46,7 +49,10 @@ export function PracticePage({ onExit }: Props) {
       setCardPhase('result');
       sounds.correct();
       burst();
-      if (currentSignId) recordSign(currentSignId, true);
+      if (currentSignId) {
+        recordSign(currentSignId, true);
+        if (user) logSignAttempt(user.id, currentSignId, true);
+      }
       addXp(5);
       setSessionXp((p) => p + 5);
       setSessionCorrect((p) => p + 1);
@@ -133,7 +139,10 @@ export function PracticePage({ onExit }: Props) {
     setCardPhase('result');
     const correct = answerId === currentSignId;
     if (correct) { sounds.correct(); burst(); } else { sounds.wrong(); }
-    if (currentSignId) recordSign(currentSignId, correct);
+    if (currentSignId) {
+      recordSign(currentSignId, correct);
+      if (user) logSignAttempt(user.id, currentSignId, correct);
+    }
     if (correct) {
       addXp(5);
       setSessionXp((p) => p + 5);
@@ -158,7 +167,10 @@ export function PracticePage({ onExit }: Props) {
   }, [mode, currentSignId]);
 
   const handleSkipExpressive = () => {
-    if (currentSignId) recordSign(currentSignId, false);
+    if (currentSignId) {
+      recordSign(currentSignId, false);
+      if (user) logSignAttempt(user.id, currentSignId, false);
+    }
     loopStartedRef.current = null;
     if (queueIdx + 1 < queue.length) {
       setQueueIdx((p) => p + 1);

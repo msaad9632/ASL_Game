@@ -9,6 +9,8 @@ import { LessonHeader } from '@/components/lesson/LessonHeader';
 import { ParameterChecklist } from '@/components/lesson/ParameterChecklist';
 import { ReferenceClip } from '@/components/lesson/ReferenceClip';
 import { useUserStore } from '@/stores/useUserStore';
+import { useAuth } from '@/contexts/AuthContext';
+import { logSignAttempt } from '@/hooks/useProgressSync';
 import { SIGNS } from '@/data/signs';
 import { SIGNS as ENGINE_SIGNS } from '@/engine/signs/index';
 import { getLessonById } from '@/data/lessons';
@@ -23,7 +25,8 @@ interface Props {
 
 export function LessonPage({ lessonId, onExit }: Props) {
   const lesson = getLessonById(lessonId);
-  const { addXp, completeLesson, recordSign } = useUserStore();
+  const { addXp, addDailyMinutes, completeLesson, recordSign } = useUserStore();
+  const { user } = useAuth();
   const { videoRef, status: camStatus, start: startCam, stop: stopCam } = useCamera();
   const sounds = useSounds();
   const { burst, bigCelebration } = useConfetti();
@@ -48,7 +51,11 @@ export function LessonPage({ lessonId, onExit }: Props) {
       setEarnedXp((prev) => prev + xp);
       setCorrectCount((prev) => prev + 1);
       addXp(xp);
-      if (currentSignId) recordSign(currentSignId, true);
+      addDailyMinutes(1.5);
+      if (currentSignId) {
+        recordSign(currentSignId, true);
+        if (user) logSignAttempt(user.id, currentSignId, true);
+      }
 
       timerRef.current = setTimeout(() => {
         if (promptIdx + 1 < signIds.length) {
@@ -125,7 +132,10 @@ export function LessonPage({ lessonId, onExit }: Props) {
   };
 
   const handleSkip = () => {
-    if (currentSignId) recordSign(currentSignId, false);
+    if (currentSignId) {
+      recordSign(currentSignId, false);
+      if (user) logSignAttempt(user.id, currentSignId, false);
+    }
     loopStartedForSign.current = null;
     if (promptIdx + 1 < signIds.length) {
       setPromptIdx((prev) => prev + 1);
