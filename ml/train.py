@@ -107,15 +107,21 @@ def minimal_pair_report(cm, classes) -> list[dict]:
 # ----------------------------------------------------------------- model (lazy TF)
 
 def build_model(seq_len, feat_dim, n_classes):
-    import tensorflow as tf
-    from tensorflow.keras import layers, models
+    from tensorflow.keras import layers, models, regularizers
+    # Regularized to fight the train/test overfit gap on thin data (~30 clips/sign):
+    # recurrent + input dropout inside the GRUs, weight decay on the dense head, and a
+    # smaller second recurrent layer.
+    l2 = regularizers.l2(1e-4)
     return models.Sequential([
         layers.Input(shape=(seq_len, feat_dim)),
-        layers.Bidirectional(layers.GRU(64, return_sequences=True)),
-        layers.Bidirectional(layers.GRU(48)),
-        layers.Dropout(0.3),
-        layers.Dense(64, activation="relu"),
-        layers.Dropout(0.3),
+        layers.Bidirectional(layers.GRU(
+            64, return_sequences=True, dropout=0.25, recurrent_dropout=0.25,
+            kernel_regularizer=l2)),
+        layers.Bidirectional(layers.GRU(
+            40, dropout=0.25, recurrent_dropout=0.25, kernel_regularizer=l2)),
+        layers.Dropout(0.45),
+        layers.Dense(64, activation="relu", kernel_regularizer=l2),
+        layers.Dropout(0.45),
         layers.Dense(n_classes, activation="softmax"),
     ])
 
@@ -133,7 +139,7 @@ def main() -> None:
     ap.add_argument("--cache", default="data/cache.npz")
     ap.add_argument("--epochs", type=int, default=60)
     ap.add_argument("--batch", type=int, default=32)
-    ap.add_argument("--n-aug", type=int, default=8, help="augmented copies per training clip")
+    ap.add_argument("--n-aug", type=int, default=14, help="augmented copies per training clip")
     ap.add_argument("--dry-run", action="store_true", help="verify data path without TF")
     args = ap.parse_args()
 
@@ -154,14 +160,24 @@ def main() -> None:
         return
 
     import tensorflow as tf  # noqa: F401
-    from tensorflow.keras.callbacks import EarlyStopping
+    from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+    from tensorflow.keras.losses import CategoricalCrossentropy
+    from tensorflow.keras.utils import to_categorical
 
-    model = build_model(seq_len, feat_dim, len(classes))
-    model.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+    n_cls = len(classes)
+    # One-hot + label smoothing: discourages over-confident memorization on thin data.
+    ytr_oh = to_categorical(ytr, n_cls)
+    yva_oh = to_categorical(y[va], n_cls) if va.sum() else None
+
+    model = build_model(seq_len, feat_dim, n_cls)
+    model.compile(optimizer="adam",
+                  loss=CategoricalCrossentropy(label_smoothing=0.1),
+                  metrics=["accuracy"])
     cbs = []
     if va.sum() > 0:
-        cbs.append(EarlyStopping(monitor="val_loss", patience=8, restore_best_weights=True))
-    model.fit(Xtr, ytr, validation_data=(X[va], y[va]) if va.sum() else None,
+        cbs.append(EarlyStopping(monitor="val_loss", patience=14, restore_best_weights=True))
+        cbs.append(ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=5, min_lr=1e-5))
+    model.fit(Xtr, ytr_oh, validation_data=(X[va], yva_oh) if va.sum() else None,
               epochs=args.epochs, batch_size=args.batch, callbacks=cbs, verbose=2)
 
     # Evaluate

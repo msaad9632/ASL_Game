@@ -82,10 +82,10 @@ def time_warp(seq: np.ndarray, factor: float) -> np.ndarray:
 
 def augment_sequence(seq: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     """One random composed augmentation of a single (T, 86) sequence."""
-    out = rotate(seq, rng.uniform(-12.0, 12.0))
-    out = scale(out, rng.uniform(0.9, 1.1))
-    out = time_warp(out, rng.uniform(0.85, 1.18))
-    out = jitter(out, rng.uniform(0.005, 0.02), rng)
+    out = rotate(seq, rng.uniform(-16.0, 16.0))
+    out = scale(out, rng.uniform(0.82, 1.18))
+    out = time_warp(out, rng.uniform(0.80, 1.25))
+    out = jitter(out, rng.uniform(0.006, 0.028), rng)
     return out
 
 
