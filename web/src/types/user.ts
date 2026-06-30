@@ -24,6 +24,12 @@ export interface Quest {
 
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced';
 
+export interface Chest {
+  id: string;
+  worldId: string;
+  readyAt: number;
+}
+
 export interface UserProgress {
   xp: number;
   level: number;
@@ -47,6 +53,11 @@ export interface UserProgress {
   showcaseBadges: string[];
   speedHighScores: Record<string, SpeedHighScore>;
   totalCorrectSigns: number;
+  pendingChests: Chest[];
+  ownedCosmetics: string[];
+  equippedBorder: string | null;
+  equippedAvatar: string | null;
+  friends: string[];
 }
 
 export interface SignStats {

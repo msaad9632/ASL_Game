@@ -5,8 +5,11 @@ import { LessonPage } from '@/pages/LessonPage';
 import { PracticePage } from '@/pages/PracticePage';
 import { StoryPage } from '@/pages/StoryPage';
 import { SpeedChallengePage } from '@/pages/SpeedChallengePage';
+import { ShopPage } from '@/pages/ShopPage';
+import { FriendsPage } from '@/pages/FriendsPage';
+import { MultiplayerPage } from '@/pages/MultiplayerPage';
 import { OnboardingFlow } from '@/components/onboarding/OnboardingFlow';
-import { COFFEE_SHOP_STORY } from '@/data/stories';
+import { STORIES } from '@/data/stories';
 import { useProgressSync } from '@/hooks/useProgressSync';
 import { useUserStore } from '@/stores/useUserStore';
 
@@ -16,7 +19,10 @@ type Screen =
   | { type: 'lesson'; lessonId: string }
   | { type: 'practice'; filterSignIds?: string[]; autoStart?: boolean }
   | { type: 'story'; storyId: string }
-  | { type: 'speed' };
+  | { type: 'speed' }
+  | { type: 'shop' }
+  | { type: 'friends' }
+  | { type: 'multiplayer' };
 
 export default function App() {
   useProgressSync();
@@ -40,6 +46,9 @@ export default function App() {
           onStartPractice={(opts) => setScreen({ type: 'practice', ...opts })}
           onStartStory={(id) => setScreen({ type: 'story', storyId: id })}
           onStartSpeed={() => setScreen({ type: 'speed' })}
+          onOpenShop={() => setScreen({ type: 'shop' })}
+          onOpenFriends={() => setScreen({ type: 'friends' })}
+          onStartMultiplayer={() => setScreen({ type: 'multiplayer' })}
         />
       )}
 
@@ -60,16 +69,26 @@ export default function App() {
         />
       )}
 
-      {screen.type === 'story' && (
-        <StoryPage
-          key={`story-${screen.storyId}`}
-          story={COFFEE_SHOP_STORY}
-          onExit={goHome}
-        />
-      )}
+      {screen.type === 'story' && (() => {
+        const story = STORIES.find((s) => s.id === screen.storyId);
+        if (!story) return null;
+        return <StoryPage key={`story-${screen.storyId}`} story={story} onExit={goHome} />;
+      })()}
 
       {screen.type === 'speed' && (
         <SpeedChallengePage key="speed" onExit={goHome} />
+      )}
+
+      {screen.type === 'shop' && (
+        <ShopPage key="shop" onExit={goHome} />
+      )}
+
+      {screen.type === 'friends' && (
+        <FriendsPage key="friends" onExit={goHome} />
+      )}
+
+      {screen.type === 'multiplayer' && (
+        <MultiplayerPage key="multiplayer" onExit={goHome} />
       )}
     </AnimatePresence>
   );

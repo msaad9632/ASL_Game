@@ -49,7 +49,12 @@ function cardVariants(glowColor: string) {
 
 type LBTab = 'weekly' | 'alltime';
 
-export function ProfileTab() {
+interface ProfileTabProps {
+  onOpenFriends?: () => void;
+  onStartMultiplayer?: () => void;
+}
+
+export function ProfileTab({ onOpenFriends, onStartMultiplayer }: ProfileTabProps = {}) {
   const { xp, level, streak, signs, gold, lastPracticeDate, completedLessons, signAccuracy, badges, showcaseBadges, speedHighScores, activeBadge } = useUserStore();
   const { user, username, signOut } = useAuth();
   const { rows, loading: lbLoading } = useLeaderboard();
@@ -230,6 +235,30 @@ export function ProfileTab() {
               })}
             </div>
           </motion.div>
+
+          {/* Friends & Multiplayer quick actions */}
+          {(onOpenFriends || onStartMultiplayer) && (
+            <motion.div className="grid grid-cols-2 gap-3 mb-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+              {onOpenFriends && (
+                <motion.button onClick={onOpenFriends}
+                  className="bg-z-card border border-white/8 rounded-2xl p-4 text-center"
+                  whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                  <p className="text-2xl mb-1">🤝</p>
+                  <p className="font-bold text-sm">Friends</p>
+                  <p className="text-[11px] text-z-gray-400 mt-0.5">Find & add friends</p>
+                </motion.button>
+              )}
+              {onStartMultiplayer && (
+                <motion.button onClick={onStartMultiplayer}
+                  className="bg-z-card border border-white/8 rounded-2xl p-4 text-center"
+                  whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                  <p className="text-2xl mb-1">⚔️</p>
+                  <p className="font-bold text-sm">1v1 Sign</p>
+                  <p className="text-[11px] text-z-gray-400 mt-0.5">Challenge a friend</p>
+                </motion.button>
+              )}
+            </motion.div>
+          )}
 
           {/* Leaderboard */}
           {supabaseReady && (

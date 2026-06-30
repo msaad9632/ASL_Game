@@ -18,7 +18,11 @@ const fireVariants = {
   },
 };
 
-export function TopBar() {
+interface TopBarProps {
+  onOpenShop?: () => void;
+}
+
+export function TopBar({ onOpenShop }: TopBarProps = {}) {
   const { streak, signs, gold, activeBadge } = useUserStore();
   const activeBadgeDef = activeBadge ? getBadge(activeBadge) : null;
 
@@ -68,9 +72,10 @@ export function TopBar() {
             <span className="font-bold text-xs text-z-purple-light">{signs}</span>
           </motion.div>
 
-          {/* Gold 🪙 */}
+          {/* Gold 🪙 — tapping opens shop */}
           <motion.div
-            className="flex items-center gap-1 bg-z-surface/60 rounded-full px-2.5 py-1 cursor-default"
+            className="flex items-center gap-1 bg-z-surface/60 rounded-full px-2.5 py-1 cursor-pointer"
+            onClick={onOpenShop}
             whileHover={{ scale: 1.08, backgroundColor: 'rgba(250, 204, 21, 0.14)', transition: { duration: 0.2 } }}
             whileTap={{ scale: 0.92 }}
           >

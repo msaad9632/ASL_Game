@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { UserProgress, SkillLevel, Quest, QuestType, SpeedTier } from '@/types/user';
+import type { UserProgress, SkillLevel, Quest, QuestType, SpeedTier, Chest } from '@/types/user';
 import { generateQuestsForToday } from '@/data/quests';
 import { ALL_BADGES, getBadge } from '@/data/badges';
 
@@ -37,6 +37,11 @@ function defaultProgress(): UserProgress {
     showcaseBadges: [],
     speedHighScores: {},
     totalCorrectSigns: 0,
+    pendingChests: [],
+    ownedCosmetics: [],
+    equippedBorder: null,
+    equippedAvatar: null,
+    friends: [],
   };
 }
 
@@ -64,6 +69,13 @@ interface UserStore extends UserProgress {
   setActiveBadge: (id: string | null) => void;
   toggleShowcaseBadge: (id: string) => void;
   recordSpeedResult: (tier: SpeedTier, score: number, combo: number, signsEarned: number) => void;
+  purchaseCosmetic: (itemId: string, goldPrice: number) => boolean;
+  equipBorder: (itemId: string | null) => void;
+  equipAvatar: (itemId: string | null) => void;
+  openChest: (chestId: string) => { signs: number; gold: number };
+  skipChest: (chestId: string) => boolean;
+  addFriend: (userId: string) => void;
+  removeFriend: (userId: string) => void;
 }
 
 export const useUserStore = create<UserStore>()(
@@ -89,7 +101,17 @@ export const useUserStore = create<UserStore>()(
       completeLesson: (lessonId) => {
         set((s) => {
           if (s.completedLessons.includes(lessonId)) return s;
-          return { completedLessons: [...s.completedLessons, lessonId] };
+          const newCompleted = [...s.completedLessons, lessonId];
+          // Award a chest every 3rd completed lesson
+          const newChests = [...s.pendingChests];
+          if (newCompleted.length % 3 === 0) {
+            newChests.push({
+              id: `chest-${Date.now()}`,
+              worldId: 'coffee',
+              readyAt: Date.now() + 60 * 60 * 1000,
+            });
+          }
+          return { completedLessons: newCompleted, pendingChests: newChests };
         });
         get().checkStreak();
         get().updateQuestProgress('complete_lesson', 1);
@@ -348,6 +370,54 @@ export const useUserStore = create<UserStore>()(
         });
         get().checkBadges();
       },
+
+      purchaseCosmetic: (itemId, goldPrice) => {
+        const s = get();
+        if (s.gold < goldPrice || s.ownedCosmetics.includes(itemId)) return false;
+        set((st) => ({ gold: st.gold - goldPrice, ownedCosmetics: [...st.ownedCosmetics, itemId] }));
+        return true;
+      },
+
+      equipBorder: (itemId) => set({ equippedBorder: itemId }),
+      equipAvatar: (itemId) => set({ equippedAvatar: itemId }),
+
+      openChest: (chestId) => {
+        const s = get();
+        const chest = s.pendingChests.find((c: Chest) => c.id === chestId);
+        if (!chest || chest.readyAt > Date.now()) return { signs: 0, gold: 0 };
+        const signsWon = Math.floor(Math.random() * 150) + 50;
+        const goldWon = Math.floor(Math.random() * 8) + 2;
+        set((st) => ({
+          pendingChests: st.pendingChests.filter((c: Chest) => c.id !== chestId),
+          signs: st.signs + signsWon,
+          gold: st.gold + goldWon,
+        }));
+        return { signs: signsWon, gold: goldWon };
+      },
+
+      skipChest: (chestId) => {
+        const s = get();
+        const chest = s.pendingChests.find((c: Chest) => c.id === chestId);
+        if (!chest) return false;
+        const hoursLeft = Math.ceil((chest.readyAt - Date.now()) / (1000 * 60 * 60));
+        const cost = Math.max(5, hoursLeft * 20);
+        if (s.gold < cost) return false;
+        set((st) => ({
+          gold: st.gold - cost,
+          pendingChests: st.pendingChests.map((c: Chest) =>
+            c.id === chestId ? { ...c, readyAt: 0 } : c
+          ),
+        }));
+        return true;
+      },
+
+      addFriend: (userId) => set((s) => ({
+        friends: s.friends.includes(userId) ? s.friends : [...s.friends, userId],
+      })),
+
+      removeFriend: (userId) => set((s) => ({
+        friends: s.friends.filter((id) => id !== userId),
+      })),
     }),
     { name: 'asl-game-progress' }
   )

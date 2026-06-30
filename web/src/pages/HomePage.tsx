@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { TopBar } from '@/components/shared/TopBar';
 import { StreakCard } from '@/components/home/StreakCard';
-import { LessonTree } from '@/components/home/LessonTree';
 import { BottomNav, type Tab } from '@/components/home/BottomNav';
 import { PracticeTab } from '@/components/home/PracticeTab';
 import { ProfileTab } from '@/components/home/ProfileTab';
 import { AlphabetTab } from '@/components/home/AlphabetTab';
 import { DailyQuestsCard } from '@/components/home/DailyQuestsCard';
+import { WorldMap } from '@/components/home/WorldMap';
+import { ChestCard } from '@/components/home/ChestCard';
 import { useUserStore } from '@/stores/useUserStore';
 
 interface Props {
@@ -15,9 +16,20 @@ interface Props {
   onStartPractice: (opts?: { filterSignIds?: string[]; autoStart?: boolean }) => void;
   onStartStory: (id: string) => void;
   onStartSpeed: () => void;
+  onOpenShop: () => void;
+  onOpenFriends: () => void;
+  onStartMultiplayer: () => void;
 }
 
-export function HomePage({ onStartLesson, onStartPractice, onStartStory, onStartSpeed }: Props) {
+export function HomePage({
+  onStartLesson,
+  onStartPractice,
+  onStartStory,
+  onStartSpeed,
+  onOpenShop,
+  onOpenFriends,
+  onStartMultiplayer,
+}: Props) {
   const [tab, setTab] = useState<Tab>('learn');
   const { refreshDailyQuests } = useUserStore();
 
@@ -27,7 +39,7 @@ export function HomePage({ onStartLesson, onStartPractice, onStartStory, onStart
 
   return (
     <div className="min-h-screen bg-z-bg">
-      <TopBar />
+      <TopBar onOpenShop={onOpenShop} />
 
       <div className="max-w-lg mx-auto px-4 pt-4">
         <AnimatePresence mode="wait">
@@ -40,14 +52,12 @@ export function HomePage({ onStartLesson, onStartPractice, onStartStory, onStart
               transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
             >
               <StreakCard />
+              <ChestCard />
               <DailyQuestsCard />
-              <LessonTree onSelectLesson={(id) => {
-                if (id === 'coffee-story') {
-                  onStartStory(id);
-                } else {
-                  onStartLesson(id);
-                }
-              }} />
+              <WorldMap
+                onSelectLesson={onStartLesson}
+                onStartStory={onStartStory}
+              />
             </motion.div>
           )}
 
@@ -90,7 +100,10 @@ export function HomePage({ onStartLesson, onStartPractice, onStartStory, onStart
               exit={{ opacity: 0, x: -22, scale: 0.97 }}
               transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
             >
-              <ProfileTab />
+              <ProfileTab
+                onOpenFriends={onOpenFriends}
+                onStartMultiplayer={onStartMultiplayer}
+              />
             </motion.div>
           )}
         </AnimatePresence>
