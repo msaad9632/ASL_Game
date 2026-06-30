@@ -1,8 +1,17 @@
-import { useUserStore } from '@/stores/useUserStore';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useUserStore } from '@/stores/useUserStore';
+import { useAuth } from '@/contexts/AuthContext';
+import { useLeaderboard } from '@/hooks/useLeaderboard';
+import { AuthModal } from '@/components/auth/AuthModal';
+import { supabaseReady } from '@/lib/supabase';
 
 export function ProfileTab() {
   const { xp, level, streak, completedLessons, signAccuracy } = useUserStore();
+  const { user, username, signOut } = useAuth();
+  const { rows, loading: lbLoading } = useLeaderboard();
+  const [showAuth, setShowAuth] = useState(false);
+
   const totalSigns = Object.keys(signAccuracy).length;
   const masteredSigns = Object.values(signAccuracy).filter(
     (s) => s.successes >= 3 && s.successes / s.attempts >= 0.7
@@ -17,22 +26,64 @@ export function ProfileTab() {
 
   return (
     <div className="px-4 pb-24">
+      {/* Auth banner */}
       <motion.div
-        className="text-center mb-8"
-        initial={{ opacity: 0, y: 20 }}
+        className="mb-5"
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-z-purple to-z-purple-deep flex items-center justify-center text-5xl mx-auto mb-3 shadow-lg shadow-z-purple/30">
+        {user ? (
+          <div className="bg-z-card border border-white/5 rounded-2xl p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-z-purple to-z-purple-deep flex items-center justify-center text-lg">
+                🤟
+              </div>
+              <div>
+                <p className="font-bold text-sm">{username ?? '…'}</p>
+                <p className="text-z-gray-400 text-xs">Progress syncing</p>
+              </div>
+            </div>
+            <button
+              onClick={signOut}
+              className="text-xs text-z-gray-400 hover:text-white border border-white/10 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <div className="bg-z-card border border-white/5 rounded-2xl p-4 flex items-center justify-between">
+            <div>
+              <p className="font-bold text-sm">Save your progress</p>
+              <p className="text-z-gray-400 text-xs">Sign in to sync + join leaderboards</p>
+            </div>
+            <button
+              onClick={() => setShowAuth(true)}
+              className="text-xs bg-z-purple text-white rounded-xl px-4 py-2 font-bold"
+            >
+              Sign in
+            </button>
+          </div>
+        )}
+      </motion.div>
+
+      {/* Avatar + mastery */}
+      <motion.div
+        className="text-center mb-6"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+      >
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-z-purple to-z-purple-deep flex items-center justify-center text-4xl mx-auto mb-3 shadow-lg shadow-z-purple/30">
           🤟
         </div>
-        <h2 className="text-2xl font-bold tracking-tight">Your Stats</h2>
-        <p className="text-z-gray-300 text-sm mt-1">
+        <p className="text-z-gray-300 text-sm">
           {masteredSigns > 0
             ? `${masteredSigns} of ${totalSigns} signs mastered`
             : 'Start signing to track progress'}
         </p>
       </motion.div>
 
+      {/* Stats grid */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         {stats.map((stat, i) => (
           <motion.div
@@ -43,19 +94,18 @@ export function ProfileTab() {
             transition={{ delay: i * 0.06 }}
           >
             <span className="text-2xl">{stat.icon}</span>
-            <p className={`text-2xl font-bold mt-1 ${stat.color}`}>
-              {stat.value}
-            </p>
+            <p className={`text-2xl font-bold mt-1 ${stat.color}`}>{stat.value}</p>
             <p className="text-[11px] text-z-gray-400 mt-0.5 tracking-wide">{stat.label}</p>
           </motion.div>
         ))}
       </div>
 
+      {/* Weekly calendar */}
       <motion.div
-        className="bg-z-card border border-white/5 rounded-2xl p-5"
+        className="bg-z-card border border-white/5 rounded-2xl p-5 mb-5"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
+        transition={{ delay: 0.28 }}
       >
         <h3 className="font-bold text-base mb-3 tracking-wide">This Week</h3>
         <div className="flex justify-between">
@@ -81,6 +131,57 @@ export function ProfileTab() {
           })}
         </div>
       </motion.div>
+
+      {/* Weekly leaderboard */}
+      {supabaseReady && (
+        <motion.div
+          className="bg-z-card border border-white/5 rounded-2xl p-5"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.36 }}
+        >
+          <h3 className="font-bold text-base mb-3 tracking-wide">Weekly Leaderboard</h3>
+          {lbLoading ? (
+            <p className="text-z-gray-400 text-sm text-center py-4">Loading…</p>
+          ) : rows.length === 0 ? (
+            <p className="text-z-gray-400 text-sm text-center py-4">
+              No one on the board yet — be the first!
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {rows.slice(0, 10).map((row, i) => (
+                <div
+                  key={row.id}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-xl ${
+                    row.id === user?.id ? 'bg-z-purple/20 border border-z-purple/30' : 'bg-white/3'
+                  }`}
+                >
+                  <span className="w-5 text-center text-xs font-bold text-z-gray-400">
+                    {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
+                  </span>
+                  <span className="flex-1 text-sm font-semibold truncate">{row.username}</span>
+                  <span className="text-xs text-z-gray-300 tabular-nums">
+                    {row.signs_this_week} signs
+                  </span>
+                  <span className="text-xs text-z-yellow tabular-nums font-bold">
+                    {row.total_xp} XP
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {!user && (
+            <p className="text-z-gray-400 text-xs text-center mt-3">
+              <button onClick={() => setShowAuth(true)} className="underline text-z-purple-light">
+                Sign in
+              </button>{' '}
+              to appear on the board
+            </p>
+          )}
+        </motion.div>
+      )}
+
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </div>
   );
 }

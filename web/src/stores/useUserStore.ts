@@ -27,6 +27,7 @@ interface UserStore extends UserProgress {
   recordSign: (signId: string, correct: boolean) => void;
   checkStreak: () => void;
   reset: () => void;
+  mergeProgress: (remote: Partial<UserProgress>) => void;
 }
 
 export const useUserStore = create<UserStore>()(
@@ -113,6 +114,35 @@ export const useUserStore = create<UserStore>()(
       },
 
       reset: () => set(defaultProgress()),
+
+      // Called after sign-in: take the best of local + remote.
+      mergeProgress: (remote: Partial<UserProgress>) => {
+        set((local) => {
+          const merged: Partial<UserProgress> = {};
+
+          if ((remote.xp ?? 0) > local.xp) merged.xp = remote.xp;
+          if ((remote.level ?? 1) > local.level) merged.level = remote.level;
+          if ((remote.streak ?? 0) > local.streak) merged.streak = remote.streak;
+
+          if (remote.completedLessons) {
+            const union = Array.from(new Set([...local.completedLessons, ...remote.completedLessons]));
+            merged.completedLessons = union;
+          }
+
+          if (remote.signAccuracy) {
+            const merged_acc = { ...local.signAccuracy };
+            for (const [id, rs] of Object.entries(remote.signAccuracy)) {
+              const ls = local.signAccuracy[id];
+              if (!ls || rs.lastAttempt > ls.lastAttempt) merged_acc[id] = rs;
+            }
+            merged.signAccuracy = merged_acc;
+          }
+
+          if (remote.lastPracticeDate) merged.lastPracticeDate = remote.lastPracticeDate;
+
+          return merged;
+        });
+      },
     }),
     {
       name: 'asl-game-progress',

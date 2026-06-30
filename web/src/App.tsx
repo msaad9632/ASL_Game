@@ -5,6 +5,7 @@ import { LessonPage } from '@/pages/LessonPage';
 import { PracticePage } from '@/pages/PracticePage';
 import { StoryPage } from '@/pages/StoryPage';
 import { COFFEE_SHOP_STORY } from '@/data/stories';
+import { useProgressSync } from '@/hooks/useProgressSync';
 
 type Screen =
   | { type: 'home' }
@@ -13,6 +14,7 @@ type Screen =
   | { type: 'story'; storyId: string };
 
 export default function App() {
+  useProgressSync();
   const [screen, setScreen] = useState<Screen>({ type: 'home' });
 
   const goHome = () => setScreen({ type: 'home' });
