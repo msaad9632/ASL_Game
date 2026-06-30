@@ -4,6 +4,7 @@ import { RollingBuffer, HandStabilizer } from '@/engine/landmarks';
 import { verify, type VerifyResult, resultPassed } from '@/engine/verifier';
 import { gatePass, gateHint, type GateDecision } from '@/engine/gate';
 import { topK, type SignClassifier } from '@/engine/classifier';
+import { GATE_CONFIDENCE } from '@/config/classifier';
 import type { Sign } from '@/engine/schema';
 
 export type RecognitionStatus = 'loading' | 'ready' | 'running' | 'error';
@@ -37,8 +38,12 @@ export function useRecognition(opts?: UseRecognitionOpts) {
   voteCallbackRef.current = opts?.onVote;
   const classifierRef = useRef<SignClassifier | null | undefined>(opts?.classifier);
   classifierRef.current = opts?.classifier;
-  const gateConfRef = useRef(opts?.gateConfidence ?? 0.5);
-  gateConfRef.current = opts?.gateConfidence ?? 0.5;
+  // Veto threshold: the classifier only overrides a rule-pass when it's at least this confident
+  // the user signed a DIFFERENT sign. Defaults to the config value (GATE_CONFIDENCE, 0.7) so a
+  // low-confidence guess can't reject a correct sign — previously hardcoded 0.5, which let a
+  // ~53% guess wrongly veto correct attempts.
+  const gateConfRef = useRef(opts?.gateConfidence ?? GATE_CONFIDENCE);
+  gateConfRef.current = opts?.gateConfidence ?? GATE_CONFIDENCE;
   const gatingRef = useRef(false);
   const frameCountRef = useRef(0);
 

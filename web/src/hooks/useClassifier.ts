@@ -63,11 +63,39 @@ export function useClassifier() {
   }, []);
 
   // Gated debug logger for gate decisions. Stable identity across renders.
+  // TEMPORARY DEBUG: prints a labeled per-prediction breakdown proving the AI classifier is
+  // live (rule vs AI vs final, and whether the AI changed/vetoed the rule). Logging only —
+  // it reads the already-computed GateDecision and changes no behavior. To silence, set
+  // CLASSIFIER_DEBUG = false in src/config/classifier.ts.
   const logVote = useCallback((d: GateDecision) => {
     if (!CLASSIFIER_DEBUG) return;
-    const tk = d.topK.map((t) => `${t.sign} ${(t.prob * 100).toFixed(0)}%`).join('  ');
-    const tag = d.decision === 'pass' ? 'PASS ✓' : 'VETO ✗';
-    console.log(`[classifier] ${tag}  prompt=${d.prompted}  top: ${tk}${d.hint ? `  hint="${d.hint}"` : ''}`);
+    const ai = d.vote;
+    // The gate only runs AFTER the rule verifier passed for the prompted sign, so the rule's
+    // prediction here is the prompted sign.
+    const rulePred = d.prompted;
+    const aiPred = ai ? ai.topSign : '(no vote)';
+    const aiConf = ai ? `${(ai.confidence * 100).toFixed(1)}%` : 'n/a';
+    const finalPred = d.decision === 'pass' ? d.prompted : '(rejected — no pass)';
+
+    let aiEffect: string;
+    if (!ai) aiEffect = 'AI produced no vote — rule result UNCHANGED';
+    else if (d.decision === 'veto') aiEffect = `AI VETOED the rule ✗ (it saw "${ai.topSign}", not "${d.prompted}")`;
+    else if (ai.topSign !== d.prompted) aiEffect = `AI disagreed ("${ai.topSign}") but below veto threshold — rule UNCHANGED`;
+    else aiEffect = 'AI agreed with the rule ✓ — rule UNCHANGED';
+
+    const tk = d.topK.map((t) => `${t.sign} ${(t.prob * 100).toFixed(0)}%`).join(', ');
+
+    console.log(
+      '%c[AI-DEBUG] classifier ACTIVE — prediction breakdown',
+      'color:#7c3aed;font-weight:bold',
+      `\n  Rule prediction  : ${rulePred} (rule PASS)` +
+      `\n  AI prediction    : ${aiPred}` +
+      `\n  AI confidence    : ${aiConf}` +
+      `\n  Final prediction : ${finalPred}` +
+      `\n  AI effect        : ${aiEffect}` +
+      `\n  AI top-3         : ${tk}` +
+      (d.hint ? `\n  Hint shown       : "${d.hint}"` : '')
+    );
     (window as unknown as { __lastVote?: GateDecision }).__lastVote = d;
   }, []);
 
