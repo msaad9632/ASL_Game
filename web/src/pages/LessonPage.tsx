@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCamera } from '@/hooks/useCamera';
 import { useRecognition } from '@/hooks/useRecognition';
+import { useClassifier } from '@/hooks/useClassifier';
 import { useSounds } from '@/hooks/useSounds';
 import { useConfetti } from '@/hooks/useConfetti';
 import { CameraOnboarding } from '@/components/shared/CameraOnboarding';
@@ -72,7 +73,8 @@ export function LessonPage({ lessonId, onExit }: Props) {
     [phase, promptIdx, signIds, currentSignId, lessonId, addXp, recordSign, completeLesson]
   );
 
-  const recognition = useRecognition({ onPass: handlePass });
+  const { classifier, logVote } = useClassifier();
+  const recognition = useRecognition({ onPass: handlePass, classifier, onVote: logVote });
   const loopStartedForSign = useRef<string | null>(null);
 
   useEffect(() => {

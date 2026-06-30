@@ -90,3 +90,11 @@ export async function loadClassifier(modelUrl: string, classes: string[]): Promi
 }
 
 export const disabledClassifier = DISABLED;
+
+/** Top-k predictions from a vote, highest probability first — for debugging/overlays. */
+export function topK(vote: ClassifierVote, k = 3): { sign: string; prob: number }[] {
+  return Object.entries(vote.perSign)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, k)
+    .map(([sign, prob]) => ({ sign, prob }));
+}

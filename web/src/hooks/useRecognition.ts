@@ -2,8 +2,8 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { Capture } from '@/engine/capture';
 import { RollingBuffer, HandStabilizer } from '@/engine/landmarks';
 import { verify, type VerifyResult, resultPassed } from '@/engine/verifier';
-import { gatePass, gateHint } from '@/engine/gate';
-import type { SignClassifier } from '@/engine/classifier';
+import { gatePass, gateHint, type GateDecision } from '@/engine/gate';
+import { topK, type SignClassifier } from '@/engine/classifier';
 import type { Sign } from '@/engine/schema';
 
 export type RecognitionStatus = 'loading' | 'ready' | 'running' | 'error';
@@ -14,6 +14,8 @@ interface UseRecognitionOpts {
   classifier?: SignClassifier | null;
   /** Additive coaching hint when the model confidently sees a different sign. */
   onHint?: (msg: string | null) => void;
+  /** Fired for every gate decision (vote + top-k + pass/veto) — for debug logging/overlays. */
+  onVote?: (decision: GateDecision) => void;
   /** Min model probability for the prompted sign to allow a pass. */
   gateConfidence?: number;
 }
@@ -31,6 +33,8 @@ export function useRecognition(opts?: UseRecognitionOpts) {
   passCallbackRef.current = opts?.onPass;
   const hintCallbackRef = useRef(opts?.onHint);
   hintCallbackRef.current = opts?.onHint;
+  const voteCallbackRef = useRef(opts?.onVote);
+  voteCallbackRef.current = opts?.onVote;
   const classifierRef = useRef<SignClassifier | null | undefined>(opts?.classifier);
   classifierRef.current = opts?.classifier;
   const gateConfRef = useRef(opts?.gateConfidence ?? 0.5);
@@ -125,12 +129,20 @@ export function useRecognition(opts?: UseRecognitionOpts) {
                   cls.classify(snapshot)
                     .then((vote) => {
                       if (!gatedSign) return;
-                      if (gatePass(true, vote, gatedSign.name, gateConfRef.current)) {
-                        console.log('[SignUp] PASS (gated):', gatedSign.name);
+                      const passed = gatePass(true, vote, gatedSign.name, gateConfRef.current);
+                      const hint = passed ? null : gateHint(vote, gatedSign.name);
+                      voteCallbackRef.current?.({
+                        prompted: gatedSign.name,
+                        vote,
+                        decision: passed ? 'pass' : 'veto',
+                        topK: vote ? topK(vote, 3) : [],
+                        hint,
+                      });
+                      if (passed) {
                         passCallbackRef.current?.(vr);
                         hintCallbackRef.current?.(null);
                       } else {
-                        hintCallbackRef.current?.(gateHint(vote, gatedSign.name));
+                        hintCallbackRef.current?.(hint);
                       }
                     })
                     .catch((e) => console.error('[SignUp] gate error:', e))

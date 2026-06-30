@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, type Variant } from 'framer-motion';
 import { useUserStore } from '@/stores/useUserStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { supabaseReady } from '@/lib/supabase';
 
-const FIRE_REST = { rotate: 0, x: 0, scale: 1, filter: 'brightness(1) drop-shadow(0 0 0px rgba(249,115,22,0))', transition: { duration: 0.3, ease: 'easeOut' } };
+const FIRE_REST: Variant = { rotate: 0, x: 0, scale: 1, filter: 'brightness(1) drop-shadow(0 0 0px rgba(249,115,22,0))', transition: { duration: 0.3, ease: 'easeOut' } };
 
-const FIRE_HOVER: object = {
+const FIRE_HOVER: Variant = {
   rotate: [0, -4, 3, -3, 2, 0],
   x:      [0, -1.5, 1, -1, 0.5, 0],
   scale:  [1, 1.09, 1.04, 1.11, 1.05, 1],
@@ -23,9 +23,9 @@ const FIRE_HOVER: object = {
   transition: { duration: 1.9, repeat: Infinity, ease: 'easeInOut' },
 };
 
-const SPARKLE_REST = { scale: 1, filter: 'brightness(1) drop-shadow(0 0 0px rgba(94,234,212,0))', transition: { duration: 0.3, ease: 'easeOut' } };
+const SPARKLE_REST: Variant = { scale: 1, filter: 'brightness(1) drop-shadow(0 0 0px rgba(94,234,212,0))', transition: { duration: 0.3, ease: 'easeOut' } };
 
-const SPARKLE_HOVER: object = {
+const SPARKLE_HOVER: Variant = {
   scale:  [1, 1.07, 1, 1.05, 1],
   filter: [
     'brightness(1)   drop-shadow(0 0 0px rgba(94,234,212,0))',

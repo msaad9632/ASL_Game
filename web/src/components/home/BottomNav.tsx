@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, type Variant } from 'framer-motion';
 
 type Tab = 'learn' | 'review' | 'profile';
 
@@ -14,7 +14,7 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
 ];
 
 // per-icon hover motion (smooth, loops gently while hovered)
-const ICON_HOVER: Record<Tab, object> = {
+const ICON_HOVER: Record<Tab, Variant> = {
   learn:   { rotate: [0, -9, 8, -6, 0],            transition: { duration: 1.0, repeat: Infinity, ease: 'easeInOut' } },
   review:  { scale: [1, 1.16, 1, 1.12, 1],          transition: { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } },
   profile: { rotate: [0, -18, 14, -18, 14, 0],      transition: { duration: 1.1, repeat: Infinity, ease: 'easeInOut' } },

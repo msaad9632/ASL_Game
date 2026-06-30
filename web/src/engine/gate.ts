@@ -16,6 +16,20 @@ export interface ClassifierVote {
   perSign: Record<string, number>;
 }
 
+/** Full record of one gate decision — emitted to onVote for logging/debug overlays. */
+export interface GateDecision {
+  /** The sign the user was asked to make. */
+  prompted: string;
+  /** The classifier's raw vote (null if it produced nothing for this window). */
+  vote: ClassifierVote | null;
+  /** Whether the rule-pass survived the gate. */
+  decision: 'pass' | 'veto';
+  /** Top predictions, highest first. */
+  topK: { sign: string; prob: number }[];
+  /** Coaching hint when the model confidently saw a different sign. */
+  hint: string | null;
+}
+
 /**
  * Final pass decision. Requires the rule verifier to pass AND — when a classifier vote is
  * present — the classifier's probability for the PROMPTED sign to clear `minConfidence`.

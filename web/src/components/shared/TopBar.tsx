@@ -1,7 +1,7 @@
 import { useUserStore } from '@/stores/useUserStore';
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 
-const fireVariants = {
+const fireVariants: Variants = {
   rest: { rotate: 0, x: 0, scale: 1, filter: 'brightness(1) drop-shadow(0 0 0px rgba(249,115,22,0))', transition: { duration: 0.3, ease: 'easeOut' } },
   blaze: {
     rotate: [0, -4, 3, -3, 2, 0],
@@ -19,7 +19,7 @@ const fireVariants = {
   },
 };
 
-const sparkleVariants = {
+const sparkleVariants: Variants = {
   rest:    { scale: 1, filter: 'brightness(1) drop-shadow(0 0 0px rgba(94,234,212,0))', transition: { duration: 0.3, ease: 'easeOut' } },
   sparkle: {
     scale:  [1, 1.07, 1, 1.05, 1],
