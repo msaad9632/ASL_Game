@@ -9,7 +9,7 @@ export function StreakCard() {
     <motion.div
       className="relative overflow-hidden rounded-3xl p-5 mb-6"
       style={{
-        background: 'linear-gradient(135deg, #2D1150 0%, #7B2FBE 100%)',
+        background: 'linear-gradient(135deg, #18103A 0%, #7C3AED 100%)',
       }}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -50,7 +50,7 @@ export function StreakCard() {
           <div className="h-2.5 bg-white/15 rounded-full overflow-hidden">
             <motion.div
               className="h-full rounded-full"
-              style={{ background: 'linear-gradient(90deg, #F59E0B, #FBBF24)' }}
+              style={{ background: 'linear-gradient(90deg, #F97316, #FDBA74)' }}
               initial={{ width: 0 }}
               animate={{ width: `${progress * 100}%` }}
               transition={{ duration: 0.8, ease: 'easeOut', delay: 0.3 }}

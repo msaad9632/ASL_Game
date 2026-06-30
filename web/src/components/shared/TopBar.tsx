@@ -9,7 +9,14 @@ export function TopBar() {
       <div className="max-w-lg mx-auto flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="text-2xl">🤟</span>
-          <span className="font-bold text-xl tracking-tight text-z-purple-glow">SignUp</span>
+          <span
+            className="font-bold text-xl tracking-tight"
+            style={{
+              background: 'linear-gradient(90deg, #A78BFA 0%, #14B8A6 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >SignUp</span>
         </div>
 
         <div className="flex items-center gap-5">

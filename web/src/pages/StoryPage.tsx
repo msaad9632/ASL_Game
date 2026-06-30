@@ -163,7 +163,7 @@ export function StoryPage({ story, onExit }: Props) {
                 onClick={handleStart}
                 disabled={recognition.status === 'loading'}
                 className="mt-2 px-8 py-3 rounded-2xl font-bold text-white text-lg disabled:opacity-50"
-                style={{ background: 'linear-gradient(135deg, #7B2FBE, #A855F7)' }}
+                style={{ background: 'linear-gradient(135deg, #7C3AED, #A78BFA)' }}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
               >
@@ -260,7 +260,7 @@ export function StoryPage({ story, onExit }: Props) {
               <motion.button
                 onClick={onExit}
                 className="mt-4 px-8 py-3 rounded-2xl font-bold text-white"
-                style={{ background: 'linear-gradient(135deg, #7B2FBE, #A855F7)' }}
+                style={{ background: 'linear-gradient(135deg, #7C3AED, #A78BFA)' }}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
               >
