@@ -19,10 +19,12 @@ type CardPhase = 'prompt' | 'result';
 
 interface Props {
   onExit: () => void;
+  filterSignIds?: string[];
+  autoStartExpressive?: boolean;
 }
 
-export function PracticePage({ onExit }: Props) {
-  const { signAccuracy, recordSign, addXp } = useUserStore();
+export function PracticePage({ onExit, filterSignIds, autoStartExpressive }: Props) {
+  const { signAccuracy, recordSign, addXp, recordPracticeSession } = useUserStore();
   const { user } = useAuth();
   const { videoRef, status: camStatus, start: startCam, stop: stopCam } = useCamera();
   const sounds = useSounds();
@@ -106,10 +108,21 @@ export function PracticePage({ onExit }: Props) {
     };
   }, []);
 
+  // Auto-start for weak signs / letters mode
+  useEffect(() => {
+    if (autoStartExpressive) {
+      startExpressive();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const startExpressive = async () => {
-    const due = getSignsDueForReview(signAccuracy, 8);
-    const signs = due.length > 0 ? due : allSignIds.slice(0, 6);
-    setQueue(signs.sort(() => Math.random() - 0.5));
+    const pool = filterSignIds ?? (() => {
+      const due = getSignsDueForReview(signAccuracy, 8);
+      return due.length > 0 ? due : allSignIds.slice(0, 6);
+    })();
+    recordPracticeSession();
+    setQueue([...pool].sort(() => Math.random() - 0.5));
     setQueueIdx(0);
     setCardPhase('prompt');
     setSessionXp(0);
@@ -120,8 +133,9 @@ export function PracticePage({ onExit }: Props) {
   };
 
   const startReceptive = () => {
-    const signs = allSignIds
-      .filter((id) => SIGNS[id].clip)
+    const pool = filterSignIds ?? allSignIds;
+    const signs = pool
+      .filter((id) => SIGNS[id]?.clip)
       .sort(() => Math.random() - 0.5)
       .slice(0, 8);
     setQueue(signs);
