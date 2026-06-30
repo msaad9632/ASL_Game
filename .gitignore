@@ -21,6 +21,14 @@ recordings/
 *.avi
 *.mov
 
+# --- ML dataset: bulk landmark extraction output (regenerable, huge with ASL Citizen).
+#     The small hand-recorded fixtures in tests/fixtures/ stay tracked; this bulk does not. ---
+data/landmarks/
+data/manifest.csv
+data/*.npy
+ml/runs/
+calibration_log.json
+
 # --- OS / editor ---
 .DS_Store
 Thumbs.db
