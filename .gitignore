@@ -48,3 +48,6 @@ htmlcov/
 
 # --- Claude Code local (per-machine) settings ---
 .claude/settings.local.json
+
+# --- Supabase CLI local cache (project link, pooler URL, per-machine) ---
+supabase/.temp/
