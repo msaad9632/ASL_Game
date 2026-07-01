@@ -4,7 +4,7 @@ import { RollingBuffer, HandStabilizer, type Frame } from '@/engine/landmarks';
 import { verify, type VerifyResult, resultPassed } from '@/engine/verifier';
 import { gatePass, gateHint, type GateDecision } from '@/engine/gate';
 import { topK, type SignClassifier } from '@/engine/classifier';
-import { GATE_CONFIDENCE } from '@/config/classifier';
+import { GATE_CONFIDENCE, GATE_EXCLUDED_SIGNS } from '@/config/classifier';
 import type { Sign } from '@/engine/schema';
 
 export type RecognitionStatus = 'loading' | 'ready' | 'running' | 'error';
@@ -144,7 +144,7 @@ export function useRecognition(opts?: UseRecognitionOpts) {
             if (passFrames >= PASS_THRESHOLD) {
               passFrames = 0;
               const cls = classifierRef.current;
-              if (cls?.enabled && cls.knownSigns.has(sign.name)) {
+              if (cls?.enabled && cls.knownSigns.has(sign.name) && !GATE_EXCLUDED_SIGNS.has(sign.name)) {
                 // Gate the rule-pass through the ML classifier (single inference at pass time).
                 if (!gatingRef.current) {
                   gatingRef.current = true;
