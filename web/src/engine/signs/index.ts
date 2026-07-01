@@ -58,7 +58,13 @@ export const YOU = createSign({
 export const LETTER_A = createSign({
   name: 'LETTER_A', twoHanded: false,
   dominant: { kind: 'a', required: true },
-  location: { anchor: Anchor.NEUTRAL_SPACE, actingHand: DOMINANT, maxDistRatio: 1.5, required: true },
+  // location.required was true here (unlike the sibling letters below) with a tight 1.5
+  // maxDistRatio. NEUTRAL_SPACE scoring halves the score whenever the hand is at/above the
+  // shoulder line (verifier.ts::scoreLocation) — a common, natural hand height for
+  // fingerspelling — capping it at 0.5, permanently below the 0.6 pass threshold. Matching the
+  // other letters (required: false, maxDistRatio 3.0) since fingerspelling is a handshape sign,
+  // not a positioning sign.
+  location: { anchor: Anchor.NEUTRAL_SPACE, actingHand: DOMINANT, maxDistRatio: 3.0, required: false },
   movement: { kind: MovementKind.NONE, required: false },
 });
 

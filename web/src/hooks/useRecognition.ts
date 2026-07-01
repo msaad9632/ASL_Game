@@ -144,7 +144,7 @@ export function useRecognition(opts?: UseRecognitionOpts) {
             if (passFrames >= PASS_THRESHOLD) {
               passFrames = 0;
               const cls = classifierRef.current;
-              if (cls?.enabled) {
+              if (cls?.enabled && cls.knownSigns.has(sign.name)) {
                 // Gate the rule-pass through the ML classifier (single inference at pass time).
                 if (!gatingRef.current) {
                   gatingRef.current = true;
