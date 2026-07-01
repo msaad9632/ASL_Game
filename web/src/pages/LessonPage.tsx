@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCamera } from '@/hooks/useCamera';
-import { useRecognition } from '@/hooks/useRecognition';
+import { useRecognition, type AttemptRecord } from '@/hooks/useRecognition';
 import { useClassifier } from '@/hooks/useClassifier';
 import { useSounds } from '@/hooks/useSounds';
 import { useConfetti } from '@/hooks/useConfetti';
@@ -11,7 +11,7 @@ import { ParameterChecklist } from '@/components/lesson/ParameterChecklist';
 import { ReferenceClip } from '@/components/lesson/ReferenceClip';
 import { useUserStore } from '@/stores/useUserStore';
 import { useAuth } from '@/contexts/AuthContext';
-import { logSignAttempt } from '@/hooks/useProgressSync';
+import { logAttempt } from '@/hooks/useProgressSync';
 import { SIGNS } from '@/data/signs';
 import { SIGNS as ENGINE_SIGNS } from '@/engine/signs/index';
 import { getLessonById } from '@/data/lessons';
@@ -55,7 +55,6 @@ export function LessonPage({ lessonId, onExit }: Props) {
       addDailyMinutes(1.5);
       if (currentSignId) {
         recordSign(currentSignId, true);
-        if (user) logSignAttempt(user.id, currentSignId, true);
       }
 
       timerRef.current = setTimeout(() => {
@@ -73,8 +72,26 @@ export function LessonPage({ lessonId, onExit }: Props) {
     [phase, promptIdx, signIds, currentSignId, lessonId, addXp, recordSign, completeLesson]
   );
 
+  const handleAttempt = useCallback(
+    (a: AttemptRecord) => {
+      if (!user) return;
+      void logAttempt({
+        userId: user.id,
+        signId: a.signId,
+        rulePassed: a.rulePassed,
+        aiPrediction: a.aiPrediction,
+        aiConfidence: a.aiConfidence,
+        aiVetoed: a.aiVetoed,
+        finalPassed: a.finalPassed,
+        source: 'lesson',
+        frames: a.frames,
+      });
+    },
+    [user]
+  );
+
   const { classifier, logVote } = useClassifier();
-  const recognition = useRecognition({ onPass: handlePass, classifier, onVote: logVote });
+  const recognition = useRecognition({ onPass: handlePass, classifier, onVote: logVote, onAttempt: handleAttempt });
   const loopStartedForSign = useRef<string | null>(null);
 
   useEffect(() => {
@@ -136,7 +153,19 @@ export function LessonPage({ lessonId, onExit }: Props) {
   const handleSkip = () => {
     if (currentSignId) {
       recordSign(currentSignId, false);
-      if (user) logSignAttempt(user.id, currentSignId, false);
+      if (user) {
+        void logAttempt({
+          userId: user.id,
+          signId: currentSignId,
+          rulePassed: false,
+          aiPrediction: null,
+          aiConfidence: null,
+          aiVetoed: false,
+          finalPassed: false,
+          source: 'lesson',
+          frames: recognition.getSnapshot(),
+        });
+      }
     }
     loopStartedForSign.current = null;
     if (promptIdx + 1 < signIds.length) {

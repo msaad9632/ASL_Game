@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCamera } from '@/hooks/useCamera';
-import { useRecognition } from '@/hooks/useRecognition';
+import { useRecognition, type AttemptRecord } from '@/hooks/useRecognition';
 import { useClassifier } from '@/hooks/useClassifier';
 import { useSounds } from '@/hooks/useSounds';
 import { useConfetti } from '@/hooks/useConfetti';
@@ -9,7 +9,7 @@ import { ParameterChecklist } from '@/components/lesson/ParameterChecklist';
 import { ReferenceClip } from '@/components/lesson/ReferenceClip';
 import { useUserStore } from '@/stores/useUserStore';
 import { useAuth } from '@/contexts/AuthContext';
-import { logSignAttempt } from '@/hooks/useProgressSync';
+import { logSignAttempt, logAttempt } from '@/hooks/useProgressSync';
 import { SIGNS } from '@/data/signs';
 import { SIGNS as ENGINE_SIGNS } from '@/engine/signs/index';
 import { getSignsDueForReview, pickReceptiveDistractors } from '@/data/spaced-repetition';
@@ -54,7 +54,6 @@ export function PracticePage({ onExit, filterSignIds, autoStartExpressive }: Pro
       burst();
       if (currentSignId) {
         recordSign(currentSignId, true);
-        if (user) logSignAttempt(user.id, currentSignId, true);
       }
       addXp(5);
       setSessionXp((p) => p + 5);
@@ -72,8 +71,26 @@ export function PracticePage({ onExit, filterSignIds, autoStartExpressive }: Pro
     [mode, cardPhase, currentSignId, queueIdx, queue.length, recordSign, addXp]
   );
 
+  const handleAttempt = useCallback(
+    (a: AttemptRecord) => {
+      if (!user) return;
+      void logAttempt({
+        userId: user.id,
+        signId: a.signId,
+        rulePassed: a.rulePassed,
+        aiPrediction: a.aiPrediction,
+        aiConfidence: a.aiConfidence,
+        aiVetoed: a.aiVetoed,
+        finalPassed: a.finalPassed,
+        source: 'practice',
+        frames: a.frames,
+      });
+    },
+    [user]
+  );
+
   const { classifier, logVote } = useClassifier();
-  const recognition = useRecognition({ onPass: handlePass, classifier, onVote: logVote });
+  const recognition = useRecognition({ onPass: handlePass, classifier, onVote: logVote, onAttempt: handleAttempt });
 
   useEffect(() => {
     recognition.init();
@@ -185,7 +202,19 @@ export function PracticePage({ onExit, filterSignIds, autoStartExpressive }: Pro
   const handleSkipExpressive = () => {
     if (currentSignId) {
       recordSign(currentSignId, false);
-      if (user) logSignAttempt(user.id, currentSignId, false);
+      if (user) {
+        void logAttempt({
+          userId: user.id,
+          signId: currentSignId,
+          rulePassed: false,
+          aiPrediction: null,
+          aiConfidence: null,
+          aiVetoed: false,
+          finalPassed: false,
+          source: 'practice',
+          frames: recognition.getSnapshot(),
+        });
+      }
     }
     loopStartedRef.current = null;
     if (queueIdx + 1 < queue.length) {

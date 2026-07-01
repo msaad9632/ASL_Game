@@ -42,6 +42,7 @@ function defaultProgress(): UserProgress {
     equippedBorder: null,
     equippedAvatar: null,
     friends: [],
+    collectTrainingData: true,
   };
 }
 
@@ -76,6 +77,7 @@ interface UserStore extends UserProgress {
   skipChest: (chestId: string) => boolean;
   addFriend: (userId: string) => void;
   removeFriend: (userId: string) => void;
+  setCollectTrainingData: (enabled: boolean) => void;
 }
 
 export const useUserStore = create<UserStore>()(
@@ -222,6 +224,7 @@ export const useUserStore = create<UserStore>()(
             merged.signAccuracy = acc;
           }
           if (remote.lastPracticeDate) merged.lastPracticeDate = remote.lastPracticeDate;
+          if (remote.collectTrainingData !== undefined) merged.collectTrainingData = remote.collectTrainingData;
           return merged;
         });
       },
@@ -418,6 +421,8 @@ export const useUserStore = create<UserStore>()(
       removeFriend: (userId) => set((s) => ({
         friends: s.friends.filter((id) => id !== userId),
       })),
+
+      setCollectTrainingData: (enabled) => set({ collectTrainingData: enabled }),
     }),
     { name: 'asl-game-progress' }
   )
