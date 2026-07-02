@@ -56,6 +56,7 @@ interface UserStore extends UserProgress {
   addGold: (amount: number) => void;
   addDailyMinutes: (minutes: number) => void;
   completeLesson: (lessonId: string) => void;
+  skipLesson: (lessonId: string, cost: number) => boolean;
   recordSign: (signId: string, correct: boolean) => void;
   checkStreak: () => number[];
   reset: () => void;
@@ -118,6 +119,30 @@ export const useUserStore = create<UserStore>()(
         get().checkStreak();
         get().updateQuestProgress('complete_lesson', 1);
         get().checkBadges();
+      },
+
+      skipLesson: (lessonId, cost) => {
+        const s = get();
+        if (s.completedLessons.includes(lessonId) || s.signs < cost) return false;
+        set((st) => {
+          const newCompleted = [...st.completedLessons, lessonId];
+          const newChests = [...st.pendingChests];
+          if (newCompleted.length % 3 === 0) {
+            newChests.push({
+              id: `chest-${Date.now()}`,
+              worldId: 'coffee',
+              readyAt: Date.now() + 60 * 60 * 1000,
+            });
+          }
+          return {
+            completedLessons: newCompleted,
+            pendingChests: newChests,
+            signs: st.signs - cost,
+          };
+        });
+        get().updateQuestProgress('complete_lesson', 1);
+        get().checkBadges();
+        return true;
       },
 
       recordSign: (signId, correct) => {
